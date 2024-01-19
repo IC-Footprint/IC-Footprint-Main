@@ -1,0 +1,16 @@
+{
+  "canisters": {
+    "node_escrow": {
+      "package": "node_escrow",
+      "candid": "candid/node_escrow.did",
+      "type": "rust"
+    },
+    "escrow_manager": {
+      "package": "escrow_manager",
+      "candid": "candid/escrow_manager.did",
+      "type": "rust"
+    }
+  },
+  "dfx": "0.15.2",
+  "version": 1
+}
