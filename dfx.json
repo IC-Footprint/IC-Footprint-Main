@@ -3,12 +3,42 @@
     "node_escrow": {
       "package": "node_escrow",
       "candid": "candid/node_escrow.did",
-      "type": "rust"
+      "type": "rust",
+      "pullable": {
+        "wasm_url": "https://github.com/CarbonCrowd/carboncrowd-escrow-builds/releases/download/0.1.0/node_escrow.wasm",
+        "dependencies": [],
+        "init_guide": "Node escrow that manages a node payments"
+      }
+    },
+    "node_escrow_4d2sj-eqwzi-m7s5g-uj33s-wieqq-kgzyk-qzywl-ptltz-7zryd-sdbsc-uqe": {
+      "package": "node_escrow",
+      "candid": "candid/node_escrow.did",
+      "type": "rust",
+      "pullable": {
+        "wasm_url": "https://github.com/CarbonCrowd/carboncrowd-escrow-builds/releases/download/0.1.0/node_escrow.wasm",
+        "dependencies": [],
+        "init_guide": "Node escrow that manages a node payments"
+      }
+    },
+    "node_escrow_wy5dm-dyvr3-wpi3g-d4xcd-6paqv-75bb5-5it3l-ovbv6-botde-7dlof-qae": {
+      "package": "node_escrow",
+      "candid": "candid/node_escrow.did",
+      "type": "rust",
+      "pullable": {
+        "wasm_url": "https://github.com/CarbonCrowd/carboncrowd-escrow-builds/releases/download/0.1.0/node_escrow.wasm",
+        "dependencies": [],
+        "init_guide": "Node escrow that manages a node payments"
+      }
     },
     "escrow_manager": {
       "package": "escrow_manager",
       "candid": "candid/escrow_manager.did",
-      "type": "rust"
+      "type": "rust",
+      "pullable": {
+        "wasm_url": "https://github.com/CarbonCrowd/carboncrowd-escrow-builds/releases/download/0.1.0/escrow_manager.wasm",
+        "dependencies": [],
+        "init_guide": "Escrow manager that contains the node escrow canister ids"
+      }
     }
   },
   "dfx": "0.15.2",
