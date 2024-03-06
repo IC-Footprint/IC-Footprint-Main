@@ -11,21 +11,26 @@ thread_local! {
 
 #[query(name = "getNodeEscrow")]
 fn get_node_escrow(id: String) -> Result<Principal, ()> {
-    match ESCROW_STORE.take().get(&id) {
-        Some(principal) => Ok(*principal),
-        None => Err(()),
-    }
+    let result = ESCROW_STORE.try_with(|store| -> Result<_, ()> {
+        let store_ref = store.borrow();
+        Ok(store_ref.get(&id).cloned().ok_or(())?)
+    });
+
+    result.unwrap_or(Err(()))
 }
 
 #[update(name = "addNodeEscrow")]
 fn add_node_escrow(id: String, escrow: Principal) -> Result<(), ()> {
-    match ESCROW_STORE.take().get(&id) {
-        Some(_) => return Err(()),
-        None => {
-            ESCROW_STORE.with_borrow_mut(|store| store.insert(id, escrow));
-            return Ok(());
+    let result = ESCROW_STORE.try_with(|store| -> Result<_, ()> {
+        let mut store_ref = store.borrow_mut();
+        if store_ref.contains_key(&id) {
+            return Err(());
         }
-    }
+        store_ref.insert(id, escrow);
+        Ok(())
+    });
+
+    result.unwrap_or(Err(()))
 }
 
 export_candid!();

@@ -67,8 +67,9 @@ fn get_purchases() -> Vec<Payment> {
 #[update(name = "registerPayment")]
 async fn register_payment(ticket_count: u64) -> Result<u64, String> {
     let total_price = ticket_count * TICKET_PRICE.get();
+    let ledger_canister_id = LEDGER_CANISTER_ID.with(|id| id.borrow().clone());
 
-    match Principal::from_text(LEDGER_CANISTER_ID.take()) {
+    match Principal::from_text(ledger_canister_id) {
         Ok(principal) => {
             let transfer_args = TransferFromArgs {
                 spender_subaccount: None,
