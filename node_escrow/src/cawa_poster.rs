@@ -7,17 +7,37 @@ use ic_cdk::{
 };
 use serde_derive::{Deserialize, Serialize};
 
+
+
 #[derive(Serialize, Deserialize)]
 struct Context {
-    node_id: String,
+    project_id: String,
     ticket_count: u64,
 }
 
+// TO DO: define authorization logic
+
+#[derive(Serialize, Deserialize)]
+struct ContributionRequest {
+    amount: u64,
+    on_behalf_of: String,
+    unit: String,
+    currency: String,
+    project: String,
+}
+
 #[update]
-pub async fn send(node_id: String, ticket_count: u64) -> String {
+pub async fn send(project_id: String, node_id: String, ticket_count: u64, api_key: String) -> String {
     let host = "api.dev.cawa.tech";
     let url = "https://api.dev.cawa.tech/api/v1/contribution";
 
+   
+    fn generate_uuid() -> String {
+        let uuid = "00000000-0000-4000-8000-000000000000";
+        return uuid.to_string();
+    }
+
+    let idempotency_key = generate_uuid();
     let request_headers = vec![
         HttpHeader {
             name: "Host".to_string(),
@@ -28,22 +48,34 @@ pub async fn send(node_id: String, ticket_count: u64) -> String {
             value: "carbon_canister".to_string(),
         },
         HttpHeader {
-            name: "Idempotency-Key".to_string(),
-            value: "UUID-123456789".to_string(),
+            name: "X-Cawa-IdempotencyKey".to_string(),
+            value: idempotency_key,
         },
         HttpHeader {
             name: "Content-Type".to_string(),
             value: "application/json".to_string(),
         },
+        HttpHeader {
+            name: "Authorization".to_string(),
+            value: format!("Bearer {}", api_key),
+        }
     ];
 
-    let json_string: String =
-        "{ \"name\" : \"Grogu\", \"force_sensitive\" : \"true\" }".to_string();
+
+    let request_body_json = ContributionRequest {
+        amount: ticket_count,
+        on_behalf_of: format!("{}@carboncrowd.io", node_id).to_string(),
+        unit: "cents".to_string(),
+        currency: "EUR".to_string(),
+        project: project_id.to_string(),
+    };
+
+    let json_string = serde_json::to_string(&request_body_json).expect("Failed to serialize request body");
     let json_utf8: Vec<u8> = json_string.into_bytes();
     let request_body: Option<Vec<u8>> = Some(json_utf8);
 
     let context = Context {
-        node_id,
+        project_id,
         ticket_count,
     };
 
@@ -62,7 +94,7 @@ pub async fn send(node_id: String, ticket_count: u64) -> String {
         }),
     };
 
-    match http_request(request, 3060000).await {
+    match http_request(request, 2_000_000_000).await {
         Ok((response,)) => {
             let str_body = String::from_utf8(response.body)
                 .expect("Transformed response is not UTF-8 encoded.");
@@ -104,3 +136,4 @@ fn transform(raw: TransformArgs) -> HttpResponse {
     }
     res
 }
+
