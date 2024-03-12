@@ -13,6 +13,8 @@ use std::cell::RefCell;
 use ic_cdk::api::caller;
 use candid::Principal;
 use std::collections::HashSet;
+// use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
+// use std::time::{SystemTime, UNIX_EPOCH};
 
 
 
@@ -35,6 +37,13 @@ struct ContributionRequest {
 struct EntityRequest {
     name: String,
     email: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct GetContributions {
+    start_date: String,
+    end_date: String,
+    entity: String,
 }
 
 thread_local! {  
@@ -247,6 +256,62 @@ pub async fn create_entity(node_id: String) -> String {
     };
 
     match http_request(request, 2_000_000_000).await {
+        Ok((response,)) => {
+            let str_body = String::from_utf8(response.body)
+                .expect("Transformed response is not UTF-8 encoded.");
+            ic_cdk::api::print(format!("{:?}", str_body));
+            let result: String = format!(
+                "{}. See more info of the request sent at: {}/inspect",
+                str_body, url
+            );
+            result
+        }
+        Err((r, m)) => {
+            let message =
+                format!("The http_request resulted into error. RejectionCode: {r:?}, Error: {m}");
+
+            //Return the error as a string and end the method
+            message
+        }
+    }
+}
+
+#[update]
+async fn get_contributions(start_date: String, end_date: String, node_id: String) -> String {
+    let api_key = API_KEY.with(|k| k.borrow().clone());
+    // make the request body do a daily fetch dynamically
+    let request_body_json = GetContributions {
+        start_date: start_date,
+        end_date: end_date,
+        entity: format!("{}", node_id).to_string(),
+    };
+
+    let json_string = serde_json::to_string(&request_body_json).expect("Failed to serialize request body");
+    let json_utf8: Vec<u8> = json_string.into_bytes();
+    let request_body: Option<Vec<u8>> = Some(json_utf8);
+    let url = "https://api.dev.cawa.tech/api/v1/contribution";
+
+    let request = CanisterHttpRequestArgument {  
+        url: url.to_string(),  
+        method: HttpMethod::GET,  
+        body: request_body,   
+        max_response_bytes: None,  
+        transform: Some(TransformContext {  
+        function: TransformFunc(candid::Func {  
+        principal: ic_cdk::api::id(),  
+        method: "transform".to_string(),  
+        }),  
+        context: vec![],  
+        }),  
+        headers: vec![
+            HttpHeader {
+                name: "Authorization".to_string(),
+                value: format!("Bearer {}", api_key),
+            }
+        ],  
+       };
+
+       match http_request(request, 2_000_000_000).await {
         Ok((response,)) => {
             let str_body = String::from_utf8(response.body)
                 .expect("Transformed response is not UTF-8 encoded.");
