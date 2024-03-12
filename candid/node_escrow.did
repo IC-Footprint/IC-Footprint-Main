@@ -22,7 +22,10 @@ service : (Conf) -> {
   getPurchases : () -> (vec Payment) query;
   getTicketPrice : () -> (nat64) query;
   registerPayment : (nat64) -> (Result);
-  send : (text, nat64, text) -> (text);
+  send : (text, nat64) -> (text);
   transform : (TransformArgs) -> (HttpResponse) query;
-  create_entity: (text, text) -> (text)
+  create_entity: (text) -> (text);
+  set_api_key: (text) -> ();
+  authorize: (principal) -> ();
+  deauthorize: (principal) -> ();
 }

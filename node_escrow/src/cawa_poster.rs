@@ -6,13 +6,13 @@ use ic_cdk::{
     query, update,
 };
 use serde_derive::{Deserialize, Serialize};
-use ic_cdk::caller;
-
-// const authorized_users = vec![]; 
-
-// fn check_authorization(caller: &str, authorized_users: &Vec<&str>) -> bool {
-//     authorized_users.contains(&caller)
-// }
+// use ic_cdk::caller;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::cell::RefCell;
+use ic_cdk::api::caller;
+use candid::Principal;
+use std::collections::HashSet;
 
 
 
@@ -37,35 +37,86 @@ struct EntityRequest {
     email: String,
 }
 
+thread_local! {  
+    static API_KEY: RefCell<String> = RefCell::new(String::new());
+}
+
+thread_local! {
+    static AUTHORIZED_PRINCIPALS: RefCell<HashSet<Principal>> = RefCell::new(HashSet::new());
+}
+
+
+static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn generate_uuid() -> String {
+    let now = ic_cdk::api::time();
+    let nanoseconds = now as u64;
+    let counter_value = COUNTER.fetch_add(1, Ordering::SeqCst);
+    let combined_data = nanoseconds ^ counter_value;
+    let hex_string = format!("{:032x}", combined_data); 
+
+    if hex_string.len() != 32 {
+        panic!("Unexpected string length for UUID generation"); 
+    }
+
+    let uuid = format!(
+        "{}-{}-{}-{}-{}",
+        &hex_string[..8],
+        &hex_string[8..12],
+        &hex_string[12..16],
+        &hex_string[16..20],
+        &hex_string[20..]
+    );
+
+    ic_cdk::println!("Generated UUID: {} .", uuid);
+
+    uuid
+}
+
 #[update]
-pub async fn send(node_id: String, ticket_count: u64, api_key: String) -> String {
+pub fn set_api_key(api_key: String) {{
+    let caller_principal = caller();
+
+    AUTHORIZED_PRINCIPALS.with(|p| {{
+        let authorized_principals = p.borrow();
+
+        if authorized_principals.is_empty() || authorized_principals.contains(&caller_principal) {{
+            API_KEY.with(|k| *k.borrow_mut() = api_key);
+        }} else {{
+            ic_cdk::trap("Unauthorized: the caller is not allowed to set the API key.");
+        }}
+    }});
+}}
+
+#[update]
+pub fn authorize(principal: Principal) {{
+    AUTHORIZED_PRINCIPALS.with(|p| p.borrow_mut().insert(principal));
+}}
+
+#[update]
+pub fn deauthorize(principal: Principal) {{
+    AUTHORIZED_PRINCIPALS.with(|p| p.borrow_mut().remove(&principal));
+}}
+
+
+
+#[update]
+pub async fn send(node_id: String, ticket_count: u64) -> String {
     let host = "api.dev.cawa.tech";
     let url = "https://api.dev.cawa.tech/api/v1/contribution";
     let project_id = "018aa416-3fab-46c1-b9c1-6fab067b70b7";
-
-    // if !check_authorization(caller, &authorized_users) {
-    //     return "Unauthorized".to_string();
-    // }
-
+    let api_key = API_KEY.with(|k| k.borrow().clone());
    
-    fn generate_uuid() -> String {
-        let uuid = "00000000-0000-4000-8000-000000000000";
-        return uuid.to_string();
-    }
 
     let idempotency_key = generate_uuid();
     let request_headers = vec![
         HttpHeader {
-            name: "Host".to_string(),
-            value: format!("{host}:443"),
-        },
-        HttpHeader {
-            name: "User-Agent".to_string(),
-            value: "carbon_canister".to_string(),
+            name: "host".to_string(),
+            value: host.to_string(),
         },
         HttpHeader {
             name: "X-Cawa-IdempotencyKey".to_string(),
-            value: idempotency_key,
+            value: idempotency_key.to_string(),
         },
         HttpHeader {
             name: "Content-Type".to_string(),
@@ -125,7 +176,6 @@ pub async fn send(node_id: String, ticket_count: u64, api_key: String) -> String
             let message =
                 format!("The http_request resulted into error. RejectionCode: {r:?}, Error: {m}");
 
-            //Return the error as a string and end the method
             message
         }
     }
@@ -153,34 +203,18 @@ fn transform(raw: TransformArgs) -> HttpResponse {
     res
 }
 
-// create an cawa entity for node
+// create a PUT request to update entity for node
+// TO DO: figure out how to make PUT requests on ICP
 #[update]
-pub async fn create_entity(node_id: String, api_key: String) -> String {
+pub async fn create_entity(node_id: String) -> String {
     let host = "api.dev.cawa.tech";
     let url = "https://api.dev.cawa.tech/api/v1/entity";
+    let api_key = API_KEY.with(|k| k.borrow().clone());
 
-    // if !check_authorization(caller, &authorized_users) {
-    //     return "Unauthorized".to_string();
-    // }
-
-    fn generate_uuid() -> String {
-        let uuid = "00000000-0000-4000-8000-000000000001";
-        return uuid.to_string();
-    }
-
-    let idempotency_key = generate_uuid();
     let request_headers = vec![
         HttpHeader {
-            name: "Host".to_string(),
-            value: format!("{host}:443"),
-        },
-        HttpHeader {
-            name: "User-Agent".to_string(),
-            value: "carbon_canister".to_string(),
-        },
-        HttpHeader {
-            name: "X-Cawa-IdempotencyKey".to_string(),
-            value: idempotency_key,
+            name: "host".to_string(),
+            value: host.to_string(),
         },
         HttpHeader {
             name: "Content-Type".to_string(),
@@ -192,34 +226,24 @@ pub async fn create_entity(node_id: String, api_key: String) -> String {
         }
     ];
 
-
     let request_body_json = EntityRequest {
-        name: node_id.to_string(),
-        email: format!("{}@carboncrowd.io", node_id).to_string(),
+        name: format!("cawa{}", node_id).to_string(),
+        email: format!("cawa{}@carboncrowd.io", node_id).to_string(),
     };
 
     let json_string = serde_json::to_string(&request_body_json).expect("Failed to serialize request body");
     let json_utf8: Vec<u8> = json_string.into_bytes();
     let request_body: Option<Vec<u8>> = Some(json_utf8);
 
-    // let context = Context {
-    //     project_id: project_id.to_string(),
-    //     ticket_count,
-    // };
 
+    // TODO: Figure out how to make PUT requests
     let request = CanisterHttpRequestArgument {
         url: url.to_string(),
         max_response_bytes: None,
         method: HttpMethod::POST,
         headers: request_headers,
         body: request_body,
-        transform: Some(TransformContext {
-            function: TransformFunc(candid::Func {
-                principal: ic_cdk::api::id(),
-                method: "transform".to_string(),
-            }),
-            context: vec![],
-        }),
+        transform: None,
     };
 
     match http_request(request, 2_000_000_000).await {
@@ -242,4 +266,3 @@ pub async fn create_entity(node_id: String, api_key: String) -> String {
         }
     }
 }
-
