@@ -66,7 +66,7 @@ fn get_purchases() -> Vec<Payment> {
 
 #[update(name = "registerPayment")]
 async fn register_payment(ticket_count: u64) -> Result<u64, String> {
-    let max_ticket_count = 1000;
+    let max_ticket_count = 1000000;
     let total_price = get_price(ticket_count);
     let ledger_canister_id = LEDGER_CANISTER_ID.with(|id| id.borrow().clone());
 
