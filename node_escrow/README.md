@@ -58,6 +58,6 @@ The rest of the endpoints are done on the canister.
     - **authorize(principal: Principal)**: Authorizes a principal to set the API key.
     - **deauthorize(principal: Principal)**: Deauthorizes a principal from setting the API key.
     - **send(node_id: String, ticket_count: u64)**: Sends a contribution request to the Cawa API for a specified number of tickets.
-    - **get_contributions(start_date: String, end_date: String, node_id: String)**: Retrieves contributions made within a specified date range for a given node ID.
+    - **get_contributions_by_entity(node_id: String)**: Retrieves contributions made on behalf of a specific node
 * Queries
     - **transform(raw: TransformArgs)**: Transforms the raw HTTP response from the Cawa API into a more readable format.
