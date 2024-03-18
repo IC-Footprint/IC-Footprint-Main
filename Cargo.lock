@@ -293,6 +293,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "esg_wallet"
+version = "0.1.0"
+dependencies = [
+ "candid",
+ "ic-cdk",
+ "icrc-ledger-types",
+ "serde",
+ "serde_derive",
+ "serde_json",
+]
+
+[[package]]
 name = "fixedbitset"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -531,18 +543,6 @@ name = "new_debug_unreachable"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4a24736216ec316047a1fc4252e27dabb04218aa4a3f37c6e7ddbf1f9782b54"
-
-[[package]]
-name = "node_escrow"
-version = "0.1.0"
-dependencies = [
- "candid",
- "ic-cdk",
- "icrc-ledger-types",
- "serde",
- "serde_derive",
- "serde_json",
-]
 
 [[package]]
 name = "num-bigint"

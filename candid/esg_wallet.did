@@ -29,4 +29,5 @@ service : (Conf) -> {
   deauthorize: (principal) -> ();
   get_contributions: () -> (text);
   get_contribution_by_entity: (text) -> (text);
+  get_contribution_by_id: (text) -> (text);
 }

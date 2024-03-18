@@ -1,5 +1,5 @@
 [package]
-name = "node_escrow"
+name = "esg_wallet"
 version = "0.1.0"
 edition = "2021"
 

@@ -16,6 +16,7 @@ use icrc_ledger_types::{
     icrc2::transfer_from::{TransferFromArgs, TransferFromError},
 };
 use serde_derive::{Deserialize, Serialize};
+use crate::cawa_poster::send;
 
 type PaymentStore = BTreeMap<u64, Payment>;
 
@@ -32,6 +33,7 @@ struct Payment {
     pub payer: String,
     pub ticket_count: u64,
     pub ticket_price: u64,
+    pub contribution_id: String,
 }
 
 thread_local! {
@@ -46,6 +48,8 @@ thread_local! {
 fn init(conf: Conf) {
     TICKET_PRICE.set(conf.ticket_price);
     LEDGER_CANISTER_ID.set(conf.ledger_canister_id.to_string());
+
+    // TODO: Change NODE_ID to either Client or Wallet ID
     NODE_ID.set(conf.node_id.to_string());
 }
 
@@ -69,6 +73,7 @@ async fn register_payment(ticket_count: u64) -> Result<u64, String> {
     let max_ticket_count = 1000000;
     let total_price = get_price(ticket_count);
     let ledger_canister_id = LEDGER_CANISTER_ID.with(|id| id.borrow().clone());
+    let node_id = NODE_ID.with(|id| id.borrow().clone());
 
     if ticket_count <= 0 {
         return Err("Invalid ticket count".to_string());
@@ -106,6 +111,7 @@ async fn register_payment(ticket_count: u64) -> Result<u64, String> {
                 ic_cdk::println!("Transfer error {:?} and message {}", error.0, error.1);
                 return Err("Transaction Error".to_string());
             } else if let Ok((transactions_response,)) = transfer_result {
+                let contribution_id = send(node_id, ticket_count).await;
                 match transactions_response {
                     Ok(block_height) => {
                         CURRENT_PAYMENT_ID.set(CURRENT_PAYMENT_ID.get() + 1);
@@ -118,6 +124,7 @@ async fn register_payment(ticket_count: u64) -> Result<u64, String> {
                                     ticket_count,
                                     payer: caller().to_string(),
                                     ticket_price: TICKET_PRICE.get(),
+                                    contribution_id,
                                 },
                             )
                         });
