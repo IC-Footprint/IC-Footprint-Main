@@ -2,5 +2,5 @@
 resolver = "2"
 members = [
     "esg_wallet",
-    "escrow_manager"
+    "node_manager"
 ]

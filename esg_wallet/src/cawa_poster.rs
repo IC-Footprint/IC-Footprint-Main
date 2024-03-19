@@ -352,3 +352,5 @@ async fn get_contribution_by_id(contribution_id: String) -> String {
         }
     }
 }
+
+export_candid!();

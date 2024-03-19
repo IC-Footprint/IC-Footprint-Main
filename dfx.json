@@ -10,14 +10,14 @@
         "init_guide": "Wallet that manages payments"
       }
     },
-    "escrow_manager": {
-      "package": "escrow_manager",
-      "candid": "candid/escrow_manager.did",
+    "node_manager": {
+      "package": "node_manager",
+      "candid": "candid/node_manager.did",
       "type": "rust",
       "pullable": {
         "wasm_url": "https://github.com/CarbonCrowd/carboncrowd-escrow-builds/releases/download/0.1.0/escrow_manager.wasm",
         "dependencies": [],
-        "init_guide": "Escrow manager that contains the node escrow canister ids"
+        "init_guide": "Node manager that contains Node emissions and their division between subnets"
       }
     }
   },
