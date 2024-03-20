@@ -36,12 +36,19 @@ struct Payment {
     pub contribution_id: String,
 }
 
+#[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+struct Client {
+    pub client: String,
+    pub nodes: Option<Vec<String>>,
+}
+
 thread_local! {
     static PAYMENT_STORE: RefCell<PaymentStore> = RefCell::default();
     static TICKET_PRICE: Cell<u64> = Cell::new(0);
     static LEDGER_CANISTER_ID: RefCell<String> = RefCell::new(String::default());
     static NODE_ID: RefCell<String> = RefCell::new(String::default());
     static CURRENT_PAYMENT_ID: Cell<u64> = Cell::new(0);
+    static CLIENT_STORE: RefCell<BTreeMap<String, Client>> = RefCell::default();
 }
 
 #[init]
@@ -74,6 +81,7 @@ async fn register_payment(ticket_count: u64) -> Result<u64, String> {
     let total_price = get_price(ticket_count);
     let ledger_canister_id = LEDGER_CANISTER_ID.with(|id| id.borrow().clone());
     let node_id = NODE_ID.with(|id| id.borrow().clone());
+    let contribution_id = send(node_id, ticket_count).await;
 
     if ticket_count <= 0 {
         return Err("Invalid ticket count".to_string());
@@ -111,7 +119,6 @@ async fn register_payment(ticket_count: u64) -> Result<u64, String> {
                 ic_cdk::println!("Transfer error {:?} and message {}", error.0, error.1);
                 return Err("Transaction Error".to_string());
             } else if let Ok((transactions_response,)) = transfer_result {
-                let contribution_id = send(node_id, ticket_count).await;
                 match transactions_response {
                     Ok(block_height) => {
                         CURRENT_PAYMENT_ID.set(CURRENT_PAYMENT_ID.get() + 1);
@@ -172,6 +179,31 @@ fn post_upgrade() {
     LEDGER_CANISTER_ID.set(ledger_canister_id);
     CURRENT_PAYMENT_ID.set(current_payment_id);
     NODE_ID.set(node_id);
+}
+
+#[update(name = "addClient")]
+fn add_client(client: String, nodes: Option<Vec<String>>) {
+    CLIENT_STORE.with(|store| {
+        store.borrow_mut().insert(
+            client.clone(),
+            Client {
+                client,
+                nodes: Some(nodes),
+            },
+        )
+    });
+}
+
+#[update(name = "removeClient")]
+fn remove_client(client: String) {
+    CLIENT_STORE.with(|store| {
+        store.borrow_mut().remove(&client);
+    });
+}
+
+#[query(name = "getClients")]
+fn get_clients() -> Vec<Client> {
+    return CLIENT_STORE.with(|store| store.borrow().values().cloned().collect());
 }
 
 export_candid!();

@@ -4,11 +4,25 @@ type HttpResponse = record {
   body : vec nat8;
   headers : vec HttpHeader;
 };
+type Node = record {
+  name: text;
+  totalEmissions: float64;
+  offsetEmissions: float64
+};
+type GetEmissionsResponse = variant {
+  Ok: vec Node;
+  Err: text;
+};
+type Client = record {
+  client: text;
+  nodes: vec Node;
+};
+
 type TransformArgs = record { context : vec nat8; response : HttpResponse };
 service : {
   set_api_key : (text) -> ();
   authorize : (principal) -> ();
   deauthorize: (principal) -> ();
-  get_emissions: () -> (text);
-  transform : (TransformArgs) -> (HttpResponse) query;
+  get_emissions: () -> (GetEmissionsResponse);
+  offset_emissions: (client: Client, offset: float64, node_name: opt text) -> (text);
 }

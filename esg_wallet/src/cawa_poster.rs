@@ -16,6 +16,7 @@ use std::collections::HashSet;
 
 
 
+
 #[derive(Serialize, Deserialize)]
 struct Context {
     project_id: String,
@@ -178,10 +179,12 @@ pub async fn send(node_id: String, ticket_count: u64) -> String {
         }),
     };
 
-    match http_request(request, 2_000_000_000).await {
+    match http_request(request, 21_000_000_000).await {
         Ok((response,)) => {
             let str_body = String::from_utf8(response.body)
             .expect("Transformed response is not UTF-8 encoded.");
+
+            ic_cdk::api::print(format!("Response from cawa: {}", str_body));
         
         // Parse the JSON response
         let parsed: serde_json::Value = serde_json::from_str(&str_body)
@@ -255,7 +258,7 @@ async fn get_contributions() -> String {
         ],  
        };
 
-       match http_request(request, 2_000_000_000).await {
+       match http_request(request, 21_000_000_000).await {
         Ok((response,)) => {
             let str_body = String::from_utf8(response.body)
                 .expect("Transformed response is not UTF-8 encoded.");
@@ -297,7 +300,7 @@ async fn get_contribution_by_entity(node_id: String) -> String {
      ],  
     };
 
-    match http_request(request, 2_000_000_000).await {
+    match http_request(request, 21_000_000_000).await {
         Ok((response,)) => {
             let str_body = String::from_utf8(response.body)
                 .expect("Transformed response is not UTF-8 encoded.");
@@ -338,7 +341,7 @@ async fn get_contribution_by_id(contribution_id: String) -> String {
      ],  
     };
 
-    match http_request(request, 2_000_000_000).await {
+    match http_request(request, 21_000_000_000).await {
         Ok((response,)) => {
             let str_body = String::from_utf8(response.body)
                 .expect("Transformed response is not UTF-8 encoded.");
@@ -353,4 +356,4 @@ async fn get_contribution_by_id(contribution_id: String) -> String {
     }
 }
 
-export_candid!();
+

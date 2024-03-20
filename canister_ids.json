@@ -2,6 +2,9 @@
   "escrow_manager": {
     "ic": "icere-3qaaa-aaaal-adutq-cai"
   },
+  "esg_wallet": {
+    "ic": "mjyeg-piaaa-aaaak-qddla-cai"
+  },
   "node_escrow": {
     "ic": "g4ndo-4qaaa-aaaal-advrq-cai"
   },
