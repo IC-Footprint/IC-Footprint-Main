@@ -24,7 +24,6 @@ type PaymentStore = BTreeMap<u64, Payment>;
 #[derive(CandidType, Serialize, Deserialize, Clone, Debug, Hash, PartialEq)]
 pub struct Conf {
     ledger_canister_id: Principal,
-    ticket_price: u64,
 }
 
 #[derive(Clone, Debug, Default, CandidType, Serialize, Deserialize)]
@@ -75,9 +74,14 @@ lazy_static! {
 }
 lazy_static! {
     static ref CLIENT: Client = Client {
-        name: "bkyz2-fmaaa-aaaaa-qaaaq-cai".to_string(),
+        name: "OpenChat".to_string(),
         node_ids: NODES.clone(),
     };
+}
+
+lazy_static! {
+    // set ticket price to 1 ICP
+    static ref TICKET_PRICE: Cell<u64> = Cell::new(1);
 }
 
 thread_local! {
