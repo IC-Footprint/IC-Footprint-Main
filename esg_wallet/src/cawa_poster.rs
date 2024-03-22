@@ -119,7 +119,7 @@ pub fn deauthorize(principal: Principal) {
 
 
 #[update]
-pub async fn send(node_id: String, ticket_count: u64) -> String {
+pub async fn send(client: String, ticket_count: u64) -> String {
     let host = "api.dev.cawa.tech";
     let url = "https://api.dev.cawa.tech/api/v1/contribution/prepaid";
     let project_id = "018aa416-3fab-46c1-b9c1-6fab067b70b7";
@@ -149,7 +149,7 @@ pub async fn send(node_id: String, ticket_count: u64) -> String {
 
     let request_body_json = ContributionRequest {
         amount: ticket_count,
-        on_behalf_of: format!("cawa+{}@carboncrowd.io", node_id).to_string(),
+        on_behalf_of: format!("cawa+{}@carboncrowd.io", client).to_string(),
         unit: "kilos".to_string(),
         currency: "EUR".to_string(),
         project: project_id.to_string(),
@@ -179,7 +179,7 @@ pub async fn send(node_id: String, ticket_count: u64) -> String {
         }),
     };
 
-    match http_request(request, 21_000_000_000).await {
+    match http_request(request, 2_000_000_000).await {
         Ok((response,)) => {
             let str_body = String::from_utf8(response.body)
             .expect("Transformed response is not UTF-8 encoded.");

@@ -11,8 +11,6 @@ use ic_cdk::api::management_canister::http_request::TransformFunc;
 use ic_cdk::api::call::call;
 use candid::{CandidType, Deserialize};
 use std::time::Duration;
-// use serde_derive::{Deserialize, Serialize};
-
 
 #[derive(CandidType, Deserialize)]
 struct Node {
@@ -26,6 +24,21 @@ struct Node {
 struct Client {
     client: String,
     nodes: Vec<Node>,
+}
+
+#[derive(CandidType, Deserialize)]
+struct SimpleClient {
+    name: String,
+    node_ids: Vec<String>,
+}
+
+#[derive(CandidType, Deserialize)]
+struct Payment {
+    pub block_height: u64,
+    pub payer: String,
+    pub ticket_count: u64,
+    pub ticket_price: u64,
+    pub contribution_id: String,
 }
 
 // set api key
@@ -132,7 +145,7 @@ async fn get_emissions() -> Result<Vec<Node>, String> {
         ],  
     };
 
-    match http_request(request, 2_000_000_000).await {
+    match http_request(request, 21_000_000_000).await {
         Ok((response,)) => {
             let str_body = String::from_utf8(response.body)
         .expect("Transformed response is not UTF-8 encoded.");
@@ -160,6 +173,13 @@ async fn get_emissions() -> Result<Vec<Node>, String> {
 // offset emissions from nodes based on a client
 #[update]
 async fn offset_emissions(mut client: Client, mut offset: f64, node_name: Option<String>) -> String {
+    // If offset is 0, return early.
+    if offset == 0.0 {
+        return "No emissions offset because offset amount is 0".to_string();
+    }
+    
+    let mut offset_messages = Vec::new();
+
     if let Some(name) = node_name {
         // The client specified a node_name.
         if let Some(node) = client.nodes.iter_mut().find(|n| n.name == name) {
@@ -167,22 +187,32 @@ async fn offset_emissions(mut client: Client, mut offset: f64, node_name: Option
             let mut offset_for_this_node = offset.min(node.totalEmissions);
             node.totalEmissions -= offset_for_this_node;
             node.offsetEmissions += offset_for_this_node;
+            offset_messages.push(format!("Node {}: offset {} emissions", name, offset_for_this_node));
         }
-        return "Emissions offset successfully".to_string();
     } else {
         // The client didn't specify a node_name.
         if !client.nodes.is_empty() {
             // The client is attached to some nodes, offset the emissions.
-            offset_from_nodes(client.nodes, offset);
-            return "Emissions offset successfully".to_string();
+            for node in &mut client.nodes {
+                let offset_for_this_node = offset.min(node.totalEmissions);
+                node.totalEmissions -= offset_for_this_node;
+                node.offsetEmissions += offset_for_this_node;
+                offset_messages.push(format!("Node {}: offset {} emissions", node.name, offset_for_this_node));
+            }
         } else {
             // The client isn't attached to any nodes, select a random set of nodes and offset the emissions.
             let nodes_future = select_random_nodes(); 
             let nodes = nodes_future.await;
-            offset_from_nodes(nodes, offset);
-            return "Emissions offset successfully".to_string();
+            for mut node in nodes {
+                let offset_for_this_node = offset.min(node.totalEmissions);
+                node.totalEmissions -= offset_for_this_node;
+                node.offsetEmissions += offset_for_this_node;
+                offset_messages.push(format!("Node {}: offset {} emissions", node.name, offset_for_this_node));
+            }
         }
     }
+
+    offset_messages.join("\n")
 }
 
 #[update]
@@ -216,4 +246,26 @@ async fn select_random_nodes() -> Vec<Node> {
     
     nodes
 }
+
+#[update]
+async fn get_offset_emissions(simple_client: SimpleClient, payment: Vec<Payment>, node_name: Option<String>) -> String {
+    let all_nodes_result = get_emissions().await;
+    
+    match all_nodes_result {
+        Ok(all_nodes) => {
+            let node_ids = simple_client.node_ids.clone();
+            let nodes: Vec<Node> = all_nodes.into_iter().filter(|node| node_ids.contains(&node.name)).collect();
+            let client = Client {
+                client: simple_client.name,
+                nodes,
+            };
+            let offset = payment.iter().fold(0.0, |acc, p| acc);
+            offset_emissions(client, offset, node_name).await
+        },
+        Err(e) => {
+            format!("Error getting emissions: {}", e)
+        }
+    }
+}
+
 export_candid!();
