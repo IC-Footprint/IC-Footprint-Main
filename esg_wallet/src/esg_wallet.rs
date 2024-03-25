@@ -79,14 +79,10 @@ lazy_static! {
     };
 }
 
-lazy_static! {
-    // set ticket price to 1 ICP
-    static ref TICKET_PRICE: Cell<u64> = Cell::new(1);
-}
-
 thread_local! {
     static PAYMENT_STORE: RefCell<PaymentStore> = RefCell::default();
-    static TICKET_PRICE: Cell<u64> = Cell::new(0);
+    // set ticket price to store TICKET_PRICE
+    static TICKET_PRICE: Cell<u64> = Cell::new(1);
     static LEDGER_CANISTER_ID: RefCell<String> = RefCell::new(String::default());
     // static NODE_ID: RefCell<String> = RefCell::new(String::default());
     static CURRENT_PAYMENT_ID: Cell<u64> = Cell::new(0);
@@ -95,7 +91,7 @@ thread_local! {
 
 #[init]
 fn init(conf: Conf) {
-    TICKET_PRICE.set(conf.ticket_price);
+    // TICKET_PRICE.set(conf.ticket_price);
     LEDGER_CANISTER_ID.set(conf.ledger_canister_id.to_string());
 }
 
