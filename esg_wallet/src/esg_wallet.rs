@@ -33,6 +33,7 @@ struct Payment {
     pub ticket_count: u64,
     pub ticket_price: u64,
     pub contribution_id: String,
+    pub node_id: Option<String>,
 }
 
 #[derive(CandidType, Serialize, Deserialize, Clone, Debug, Ord, PartialEq, Eq, PartialOrd)]
@@ -81,10 +82,8 @@ lazy_static! {
 
 thread_local! {
     static PAYMENT_STORE: RefCell<PaymentStore> = RefCell::default();
-    // set ticket price to store TICKET_PRICE
     static TICKET_PRICE: Cell<u64> = Cell::new(1);
     static LEDGER_CANISTER_ID: RefCell<String> = RefCell::new(String::default());
-    // static NODE_ID: RefCell<String> = RefCell::new(String::default());
     static CURRENT_PAYMENT_ID: Cell<u64> = Cell::new(0);
     static CLIENT_STORE: RefCell<BTreeMap<String, Client>> = RefCell::default();
 }
@@ -110,8 +109,10 @@ fn get_purchases() -> Vec<Payment> {
     return PAYMENT_STORE.take().values().cloned().collect();
 }
 
+
+
 #[update(name = "registerPayment")]
-async fn register_payment(ticket_count: u64) -> String {
+async fn register_payment(ticket_count: u64, nodeId: Option<String>) -> String {
     let max_ticket_count = 1000000;
     let total_price = get_price(ticket_count);
     let ledger_canister_id = LEDGER_CANISTER_ID.with(|id| id.borrow().clone());
@@ -157,6 +158,18 @@ async fn register_payment(ticket_count: u64) -> String {
                     Ok(block_height) => {
                         CURRENT_PAYMENT_ID.set(CURRENT_PAYMENT_ID.get() + 1);
 
+                        // check if node_id is procided
+                        if let Some(ref node_id) = nodeId {
+                            // check if the node_id is not already in the list
+                            if !CLIENT.node_ids.contains(&node_id) {
+                                // if not create a new client with the node_id
+                                let client1 = Client {
+                                    name: "bkyz2-fmaaa-aaaaa-qaaaq-cai".to_string(),
+                                    node_ids: vec![node_id.to_string()],
+                                };
+                            }
+                        }
+
                         let contribution_id = send(client1, ticket_count).await;
 
                         let payment = Payment {
@@ -165,6 +178,7 @@ async fn register_payment(ticket_count: u64) -> String {
                             payer: caller().to_string(),
                             ticket_price: TICKET_PRICE.get(),
                             contribution_id,
+                            node_id: nodeId.clone(),
                         };
 
                         PAYMENT_STORE.with(|store| {
@@ -174,7 +188,11 @@ async fn register_payment(ticket_count: u64) -> String {
                             )
                         });
 
-                        set_offset_emissions().await
+                        let _ = set_offset_emissions(nodeId).await;
+                        format!(
+                            "Payment: block_height: {}, ticket_count: {}, payer: {}, ticket_price: {}, contribution_id: {}",
+                            payment.block_height, payment.ticket_count, payment.payer, payment.ticket_price, payment.contribution_id
+                        )
                     },
                     Err(e) => {
                         format!("The http_request resulted into error. Error: {:?}", e)
@@ -220,14 +238,34 @@ fn post_upgrade() {
 }
 
 #[update(name = "setOffsetEmissions")]
-async fn set_offset_emissions() -> String {
-    let canister_id = Principal::from_text("be2us-64aaa-aaaaa-qaabq-cai").expect("Failed to create Principal");
-    let client = CLIENT.clone();
+async fn set_offset_emissions(nodeId: Option<String>) -> String {
+    let canister_id = Principal::from_text("jhfj2-iqaaa-aaaak-qddxq-cai").expect("Failed to create Principal");
+    let mut client = CLIENT.clone();
     let payment: Vec<_> = PAYMENT_STORE.with(|payments| payments.borrow().values().cloned().collect());
+    
+    if let Some(ref node_id) = nodeId {
+        if !CLIENT.node_ids.contains(&node_id) {
+            let client = Client {
+                name: "bkyz2-fmaaa-aaaaa-qaaaq-cai".to_string(),
+                node_ids: vec![node_id.to_string()],
+        };
+    }
+    }
     match ic_cdk::api::call::call::<(Client, Vec<Payment>, Option<String>), (String,)>(canister_id, "get_offset_emissions", (client, payment, None)).await {
         Ok((response,)) => response,
         Err(e) => format!("Error: {:?}", e),
     }
+}
+
+#[query(name = "getPurchasesByNodeId")]
+fn get_purchases_by_node_id(node_id: String) -> Vec<Payment> {
+    PAYMENT_STORE.with(|store| {
+        store.borrow()
+            .values()
+            .cloned()
+            .filter(|payment| payment.node_id.as_ref().map_or(false, |id| id == &node_id))
+            .collect()
+    })
 }
 
 export_candid!();

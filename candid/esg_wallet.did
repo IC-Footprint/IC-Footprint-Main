@@ -13,6 +13,7 @@ type Payment = record {
   block_height : nat;
   ticket_count : nat64;
   contribution_id: text;
+  node_id: opt text;
 };
 type Client = record {
   name: text;
@@ -24,7 +25,7 @@ service : (Conf) -> {
   getPrice : (nat64) -> (nat) query;
   getPurchases : () -> (vec Payment) query;
   getTicketPrice : () -> (nat64) query;
-  registerPayment: (nat64) -> (text);
+  registerPayment: (nat64, opt text) -> (text);
   send : (text, nat64) -> (text);
   set_api_key: (text) -> ();
   authorize: (principal) -> ();
@@ -32,5 +33,6 @@ service : (Conf) -> {
   get_contributions: () -> (text);
   get_contribution_by_entity: (text) -> (text);
   get_contribution_by_id: (text) -> (text);
-  setOffsetEmissions: () -> (text);
+  setOffsetEmissions: (opt text) -> (text);
+  getPurchasesByNodeId: (text) -> (vec Payment) query;
 }

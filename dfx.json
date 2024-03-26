@@ -17,8 +17,7 @@
       "pullable": {
         "wasm_url": "https://github.com/CarbonCrowd/carboncrowd-escrow-builds/releases/download/0.1.0/node_escrow.wasm",
         "dependencies": [],
-        "init_guide": "Wallet that manages payments",
-        "init_arg": "(record {ticket_price = 1; ledger_canister_id = principal \"ryjl3-tyaaa-aaaaa-aaaba-cai\";})"
+        "init_guide": "Wallet that manages payments"
       },
       "declarations": {
         "output": "dashboard-frontend/src/declarations/esg_wallet",
