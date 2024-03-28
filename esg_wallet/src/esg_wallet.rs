@@ -18,6 +18,7 @@ use icrc_ledger_types::{
 use serde_derive::{Deserialize, Serialize};
 use crate::cawa_poster::send;
 use lazy_static::lazy_static;
+use serde_json::json;
 
 type PaymentStore = BTreeMap<u64, Payment>;
 
@@ -82,7 +83,7 @@ lazy_static! {
 
 thread_local! {
     static PAYMENT_STORE: RefCell<PaymentStore> = RefCell::default();
-    static TICKET_PRICE: Cell<u64> = Cell::new(1);
+    static TICKET_PRICE: Cell<u64> = Cell::new(2);
     static LEDGER_CANISTER_ID: RefCell<String> = RefCell::new(String::default());
     static CURRENT_PAYMENT_ID: Cell<u64> = Cell::new(0);
     static CLIENT_STORE: RefCell<BTreeMap<String, Client>> = RefCell::default();
@@ -109,8 +110,6 @@ fn get_purchases() -> Vec<Payment> {
     return PAYMENT_STORE.take().values().cloned().collect();
 }
 
-
-
 #[update(name = "registerPayment")]
 async fn register_payment(ticket_count: u64, nodeId: Option<String>) -> String {
     let max_ticket_count = 1000000;
@@ -119,11 +118,11 @@ async fn register_payment(ticket_count: u64, nodeId: Option<String>) -> String {
     let client1 = CLIENT.name.clone();
 
     if ticket_count <= 0 {
-        return "Invalid ticket count".to_string();
+        return serde_json::to_string(&json!({"error": "Invalid ticket count"})).unwrap();
     }
 
     if ticket_count > max_ticket_count {
-        return "Ticket count is too big".to_string();
+        return serde_json::to_string(&json!({"error": "Ticket count is too big"})).unwrap();
     }
 
     match Principal::from_text(ledger_canister_id) {
@@ -152,13 +151,15 @@ async fn register_payment(ticket_count: u64, nodeId: Option<String>) -> String {
 
             if let Err(error) = transfer_result {
                 ic_cdk::println!("Transfer error {:?} and message {}", error.0, error.1);
-                return "Transaction Error".to_string();
+                return serde_json::to_string(&json!({"error": "Transaction Error"})).unwrap();
             } else if let Ok((transactions_response,)) = transfer_result {
                 match transactions_response {
                     Ok(block_height) => {
                         CURRENT_PAYMENT_ID.set(CURRENT_PAYMENT_ID.get() + 1);
 
-                        // check if node_id is procided
+                       // Define contribution_id before the conditional logic
+                       let mut contribution_id = String::new();
+
                         if let Some(ref node_id) = nodeId {
                             // check if the node_id is not already in the list
                             if !CLIENT.node_ids.contains(&node_id) {
@@ -167,17 +168,18 @@ async fn register_payment(ticket_count: u64, nodeId: Option<String>) -> String {
                                     name: "bkyz2-fmaaa-aaaaa-qaaaq-cai".to_string(),
                                     node_ids: vec![node_id.to_string()],
                                 };
+                                contribution_id = send(client1.name.clone(), ticket_count).await;
                             }
+                        } else {
+                            contribution_id = send(client1, ticket_count).await;
                         }
-
-                        let contribution_id = send(client1, ticket_count).await;
-
+                        
                         let payment = Payment {
                             block_height,
                             ticket_count,
                             payer: caller().to_string(),
                             ticket_price: TICKET_PRICE.get(),
-                            contribution_id,
+                            contribution_id, 
                             node_id: nodeId.clone(),
                         };
 
@@ -188,21 +190,18 @@ async fn register_payment(ticket_count: u64, nodeId: Option<String>) -> String {
                             )
                         });
 
-                        let _ = set_offset_emissions(nodeId).await;
-                        format!(
-                            "Payment: block_height: {}, ticket_count: {}, payer: {}, ticket_price: {}, contribution_id: {}",
-                            payment.block_height, payment.ticket_count, payment.payer, payment.ticket_price, payment.contribution_id
-                        )
+                        // Return the payment struct as a JSON string
+                        return serde_json::to_string(&payment).unwrap();
                     },
                     Err(e) => {
-                        format!("The http_request resulted into error. Error: {:?}", e)
+                        return serde_json::to_string(&json!({"error": format!("The http_request resulted into error. Error: {:?}", e)})).unwrap();
                     }
                 }
             } else {
-                return "Unknown error".to_string();
+                return serde_json::to_string(&json!({"error": "Unknown error"})).unwrap();
             }
         }
-        Err(err) => return err.to_string(),
+        Err(err) => return serde_json::to_string(&json!({"error": err.to_string()})).unwrap(),
     }
 }
 

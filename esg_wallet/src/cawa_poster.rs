@@ -117,7 +117,6 @@ pub fn deauthorize(principal: Principal) {
 }
 
 
-
 #[update]
 pub async fn send(client: String, ticket_count: u64) -> String {
     let host = "api.dev.cawa.tech";
@@ -179,7 +178,7 @@ pub async fn send(client: String, ticket_count: u64) -> String {
         }),
     };
 
-    match http_request(request, 2_000_000_000).await {
+    match http_request(request, 21_000_000_000).await {
         Ok((response,)) => {
             let str_body = String::from_utf8(response.body)
             .expect("Transformed response is not UTF-8 encoded.");

@@ -9,10 +9,11 @@ use ic_cdk::api::management_canister::http_request::{
 use ic_cdk::caller;
 use ic_cdk::api::management_canister::http_request::TransformFunc;
 // use ic_cdk::api::call::call;
-use candid::{CandidType, Deserialize};
-// use std::time::Duration;
+use candid::{CandidType};
+use serde_json::json;
+use serde_derive::{Deserialize, Serialize};
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Serialize, Deserialize)]
 struct Node {
     name: String,
     totalEmissions: f64,
@@ -41,7 +42,7 @@ struct Payment {
     pub contribution_id: String,
 }
 
-// set api key
+
 thread_local! {  
     static API_KEY: RefCell<String> = RefCell::new(String::new());
     static AUTHORIZED_PRINCIPALS: RefCell<HashSet<Principal>> = RefCell::new(HashSet::new());
@@ -175,11 +176,9 @@ async fn get_emissions() -> Result<Vec<Node>, String> {
 async fn offset_emissions(mut client: Client, mut offset: f64, node_name: Option<String>) -> String {
     // If offset is 0, return early.
     if offset == 0.0 {
-        return "No emissions offset because offset amount is 0".to_string();
+        return serde_json::to_string(&json!({"message": "No emissions offset because offset amount is 0"})).unwrap();
     }
     
-    let mut offset_messages = Vec::new();
-
     if let Some(name) = node_name {
         // The client specified a node_name.
         if let Some(node) = client.nodes.iter_mut().find(|n| n.name == name) {
@@ -187,7 +186,6 @@ async fn offset_emissions(mut client: Client, mut offset: f64, node_name: Option
             let mut offset_for_this_node = offset.min(node.totalEmissions);
             node.totalEmissions -= offset_for_this_node;
             node.offsetEmissions += offset_for_this_node;
-            offset_messages.push(format!("Node {}: offset {} emissions", name, offset_for_this_node));
         }
     } else {
         // The client didn't specify a node_name.
@@ -197,7 +195,6 @@ async fn offset_emissions(mut client: Client, mut offset: f64, node_name: Option
                 let offset_for_this_node = offset.min(node.totalEmissions);
                 node.totalEmissions -= offset_for_this_node;
                 node.offsetEmissions += offset_for_this_node;
-                offset_messages.push(format!("Node {}: offset {} emissions", node.name, offset_for_this_node));
             }
         } else {
             // The client isn't attached to any nodes, select a random set of nodes and offset the emissions.
@@ -207,12 +204,12 @@ async fn offset_emissions(mut client: Client, mut offset: f64, node_name: Option
                 let offset_for_this_node = offset.min(node.totalEmissions);
                 node.totalEmissions -= offset_for_this_node;
                 node.offsetEmissions += offset_for_this_node;
-                offset_messages.push(format!("Node {}: offset {} emissions", node.name, offset_for_this_node));
             }
         }
     }
 
-    offset_messages.join("\n")
+    // Serialize the updated nodes into a JSON string
+    serde_json::to_string(&client.nodes).unwrap()
 }
 
 #[update]
