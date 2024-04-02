@@ -17,8 +17,10 @@ use icrc_ledger_types::{
 };
 use serde_derive::{Deserialize, Serialize};
 use crate::cawa_poster::send;
+use crate::cawa_poster::get_contribution_by_id;
 use lazy_static::lazy_static;
 use serde_json::json;
+use serde_json::Value;
 
 type PaymentStore = BTreeMap<u64, Payment>;
 
@@ -31,10 +33,10 @@ pub struct Conf {
 struct Payment {
     pub block_height: Nat,
     pub payer: String,
-    pub ticket_count: u64,
-    pub ticket_price: u64,
-    pub contribution_id: String,
+    pub ticket_count: f64,
+    pub ticket_price: f64,
     pub node_id: Option<String>,
+    pub cawa_url: String,
 }
 
 #[derive(CandidType, Serialize, Deserialize, Clone, Debug, Ord, PartialEq, Eq, PartialOrd)]
@@ -83,7 +85,7 @@ lazy_static! {
 
 thread_local! {
     static PAYMENT_STORE: RefCell<PaymentStore> = RefCell::default();
-    static TICKET_PRICE: Cell<u64> = Cell::new(2);
+    static TICKET_PRICE: Cell<f64> = Cell::new(1.0);
     static LEDGER_CANISTER_ID: RefCell<String> = RefCell::new(String::default());
     static CURRENT_PAYMENT_ID: Cell<u64> = Cell::new(0);
     static CLIENT_STORE: RefCell<BTreeMap<String, Client>> = RefCell::default();
@@ -96,13 +98,13 @@ fn init(conf: Conf) {
 }
 
 #[query(name = "getTicketPrice")]
-fn get_ticket_price() -> u64 {
+fn get_ticket_price() -> f64 {
     return TICKET_PRICE.get();
 }
 
 #[query(name = "getPrice")]
-fn get_price(ticket_count: u64) -> Nat {
-    return Nat::from(ticket_count * TICKET_PRICE.get());
+fn get_price(ticket_count: f64) -> f64 {
+    return f64::from(ticket_count * TICKET_PRICE.get());
 }
 
 #[query(name = "getPurchases")]
@@ -113,7 +115,7 @@ fn get_purchases() -> Vec<Payment> {
 #[update(name = "registerPayment")]
 async fn register_payment(ticket_count: u64, nodeId: Option<String>) -> String {
     let max_ticket_count = 1000000;
-    let total_price = get_price(ticket_count);
+    let total_price = get_price(ticket_count as f64);
     let ledger_canister_id = LEDGER_CANISTER_ID.with(|id| id.borrow().clone());
     let client1 = CLIENT.name.clone();
 
@@ -137,7 +139,7 @@ async fn register_payment(ticket_count: u64, nodeId: Option<String>) -> String {
                     owner: id(),
                     subaccount: None,
                 },
-                amount: Nat::from(total_price),
+                amount: Nat::from(total_price as u64),
                 fee: None,
                 memo: None,
                 created_at_time: None,
@@ -168,19 +170,21 @@ async fn register_payment(ticket_count: u64, nodeId: Option<String>) -> String {
                                     name: "bkyz2-fmaaa-aaaaa-qaaaq-cai".to_string(),
                                     node_ids: vec![node_id.to_string()],
                                 };
-                                contribution_id = send(client1.name.clone(), ticket_count).await;
+                                contribution_id = send(client1.name.clone(), ticket_count as f64).await;
                             }
                         } else {
-                            contribution_id = send(client1, ticket_count).await;
+                            contribution_id = send(client1, ticket_count as f64).await;
                         }
-                        
+
+
+                        let cawa_url = get_proof(contribution_id.clone()).await;
                         let payment = Payment {
                             block_height,
-                            ticket_count,
+                            ticket_count: ticket_count as f64,
                             payer: caller().to_string(),
-                            ticket_price: TICKET_PRICE.get(),
-                            contribution_id, 
+                            ticket_price: TICKET_PRICE.get(), 
                             node_id: nodeId.clone(),
+                            cawa_url: cawa_url,
                         };
 
                         PAYMENT_STORE.with(|store| {
@@ -224,7 +228,7 @@ fn post_upgrade() {
     let (old_payments, ledger_canister_id, ticket_price, current_payment_id, client): (
         BTreeMap<u64, Payment>,
         String,
-        u64,
+        f64,
         u64,
         String,
     ) = storage::stable_restore().unwrap();
@@ -265,6 +269,23 @@ fn get_purchases_by_node_id(node_id: String) -> Vec<Payment> {
             .filter(|payment| payment.node_id.as_ref().map_or(false, |id| id == &node_id))
             .collect()
     })
+}
+
+#[update(name = "get_proof")]
+pub async fn get_proof(contribution_id: String) -> String {
+    let json = get_contribution_by_id(contribution_id).await;
+    let data: Value = match serde_json::from_str(&json) {
+        Ok(data) => data,
+        Err(_) => return "Proof URL does not exist".to_string(),
+    };
+    if let Some(array) = data.as_array() {
+        if !array.is_empty() {
+            if let Some(proof) = array[0]["proof"].as_str() {
+                return proof.to_string();
+            }
+        }
+    }
+    "Proof URL does not exist".to_string()
 }
 
 export_candid!();

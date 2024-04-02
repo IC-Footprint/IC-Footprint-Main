@@ -20,7 +20,7 @@ use std::collections::HashSet;
 #[derive(Serialize, Deserialize)]
 struct Context {
     project_id: String,
-    ticket_count: u64,
+    ticket_count: f64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -118,11 +118,13 @@ pub fn deauthorize(principal: Principal) {
 
 
 #[update]
-pub async fn send(client: String, ticket_count: u64) -> String {
+pub async fn send(client: String, ticket_count: f64) -> String {
     let host = "api.dev.cawa.tech";
     let url = "https://api.dev.cawa.tech/api/v1/contribution/prepaid";
     let project_id = "018aa416-3fab-46c1-b9c1-6fab067b70b7";
     let api_key = API_KEY.with(|k| k.borrow().clone());
+    
+    let ticket_count_u64 = ticket_count as u64;
    
 
     let idempotency_key = generate_uuid();
@@ -147,7 +149,7 @@ pub async fn send(client: String, ticket_count: u64) -> String {
 
 
     let request_body_json = ContributionRequest {
-        amount: ticket_count,
+        amount: ticket_count_u64,
         on_behalf_of: format!("cawa+{}@carboncrowd.io", client).to_string(),
         unit: "kilos".to_string(),
         currency: "EUR".to_string(),
@@ -233,7 +235,7 @@ fn transform(raw: TransformArgs) -> HttpResponse {
 
 
 #[update]
-async fn get_contributions() -> String {
+pub async fn get_contributions() -> String {
     let api_key = API_KEY.with(|k| k.borrow().clone());
     let url = "https://api.dev.cawa.tech/api/v1/contribution";
 
@@ -275,7 +277,7 @@ async fn get_contributions() -> String {
 
 
 #[update]
-async fn get_contribution_by_entity(node_id: String) -> String {
+pub async fn get_contribution_by_entity(node_id: String) -> String {
    let api_key = API_KEY.with(|k| k.borrow().clone());
    let url = format!("https://api.dev.cawa.tech/api/v1/contribution?entity=cawa%2B{}@carboncrowd.io",node_id);
 
@@ -316,7 +318,7 @@ async fn get_contribution_by_entity(node_id: String) -> String {
 
 // get contribution by id
 #[update]
-async fn get_contribution_by_id(contribution_id: String) -> String {
+pub async fn get_contribution_by_id(contribution_id: String) -> String {
     let api_key = API_KEY.with(|k| k.borrow().clone());
     let url = format!("https://api.dev.cawa.tech/api/v1/contribution?id={}",contribution_id);
 
