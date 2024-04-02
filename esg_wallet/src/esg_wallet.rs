@@ -163,8 +163,14 @@ async fn register_payment(ticket_count: u64, nodeId: Option<String>) -> String {
                        let mut contribution_id = String::new();
 
                         if let Some(ref node_id) = nodeId {
-                            // check if the node_id is not already in the list
-                            if !CLIENT.node_ids.contains(&node_id) {
+                            // check if the node_id is a specified string
+                            if node_id == "eq6en-6jqla-fbu5s-daskr-h6hx2-376n5-iqabl-qgrng-gfqmv-n3yjr-mqe" {
+                                // set client to Openchat
+                                let client1 = CLIENT.name.clone();
+                            }
+                            else {
+                                // set client to the node_id
+                                if !CLIENT.node_ids.contains(&node_id) {
                                 // if not create a new client with the node_id
                                 let client1 = Client {
                                     name: "bkyz2-fmaaa-aaaaa-qaaaq-cai".to_string(),
@@ -172,10 +178,10 @@ async fn register_payment(ticket_count: u64, nodeId: Option<String>) -> String {
                                 };
                                 contribution_id = send(client1.name.clone(), ticket_count as f64).await;
                             }
+                        }
                         } else {
                             contribution_id = send(client1, ticket_count as f64).await;
                         }
-
 
                         let cawa_url = get_proof(contribution_id.clone()).await;
                         let payment = Payment {
@@ -261,15 +267,16 @@ async fn set_offset_emissions(nodeId: Option<String>) -> String {
 }
 
 #[query(name = "getPurchasesByNodeId")]
-fn get_purchases_by_node_id(node_id: String) -> Vec<Payment> {
-    PAYMENT_STORE.with(|store| {
+fn get_purchases_by_node_id(node_id: String) -> Vec<Payment> {{
+    let node_id_clone = node_id.clone();
+    PAYMENT_STORE.with(|store| {{
         store.borrow()
             .values()
             .cloned()
-            .filter(|payment| payment.node_id.as_ref().map_or(false, |id| id == &node_id))
+            .filter(|payment| payment.node_id.as_ref() == Some(&node_id_clone))
             .collect()
-    })
-}
+    }})
+}}
 
 #[update(name = "get_proof")]
 pub async fn get_proof(contribution_id: String) -> String {
