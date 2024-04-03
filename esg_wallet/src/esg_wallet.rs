@@ -169,9 +169,10 @@ async fn register_payment(ticket_count: u64, nodeId: Option<String>) -> String {
                                 let client1 = CLIENT.name.clone();
                             }
                             else {
-                                // set client to the node_id
+                                // set up a new client for nodes that are not Openchat
+                                // check if the node_id is not in the list of node_ids for client Openchat
                                 if !CLIENT.node_ids.contains(&node_id) {
-                                // if not create a new client with the node_id
+                                // if not create a new client for these nodes
                                 let client1 = Client {
                                     name: "bkyz2-fmaaa-aaaaa-qaaaq-cai".to_string(),
                                     node_ids: vec![node_id.to_string()],
