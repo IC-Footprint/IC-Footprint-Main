@@ -37,4 +37,5 @@ service : (Conf) -> {
   setOffsetEmissions: (opt text) -> (text);
   getPurchasesByNodeId: (text) -> (vec Payment) query;
   get_proof: (text) -> (text);
+  withdraw: (principal, nat64) -> (text);
 }

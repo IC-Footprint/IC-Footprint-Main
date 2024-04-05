@@ -296,4 +296,53 @@ pub async fn get_proof(contribution_id: String) -> String {
     "Proof URL does not exist".to_string()
 }
 
+// method to withdraw funds from the canister to wallet
+#[update(name = "withdraw")]
+async fn withdraw(wallet: Principal, amount: u64) -> String {
+    let ledger_canister_id = LEDGER_CANISTER_ID.with(|id| id.borrow().clone());
+    match Principal::from_text(ledger_canister_id) {
+        Ok(principal) => {
+            let transfer_args = TransferFromArgs {
+                spender_subaccount: None,
+                from: Account {
+                    owner: id(),
+                    subaccount: None,
+                },
+                to: Account {
+                    owner: wallet,
+                    subaccount: None,
+                },
+                amount: Nat::from(amount),
+                fee: None,
+                memo: None,
+                created_at_time: None,
+            };
+
+            let transfer_result = call::call::<
+                (TransferFromArgs,),
+                (Result<Nat, TransferFromError>,),
+            >(principal, "icrc2_transfer_from", (transfer_args,))
+            .await;
+
+            if let Err(error) = transfer_result {
+                ic_cdk::println!("Transfer error {:?} and message {}", error.0, error.1);
+                return serde_json::to_string(&json!({"error": "Transaction Error"})).unwrap();
+            } else if let Ok((transactions_response,)) = transfer_result {
+                match transactions_response {
+                    Ok(block_height) => {
+                        return serde_json::to_string(&json!({"block_height": block_height})).unwrap();
+                    },
+                    Err(e) => {
+                        return serde_json::to_string(&json!({"error": format!("The http_request resulted into error. Error: {:?}", e)})).unwrap();
+                    }
+                }
+            } else {
+                return serde_json::to_string(&json!({"error": "Unknown error"})).unwrap();
+            }
+        }
+        Err(err) => return serde_json::to_string(&json!({"error": err.to_string()})).unwrap(),
+    }
+}
+
+
 export_candid!();
