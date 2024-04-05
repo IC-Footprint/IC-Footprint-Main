@@ -251,6 +251,16 @@ fn post_upgrade() {
 
 #[update(name = "setOffsetEmissions")]
 async fn set_offset_emissions(nodeId: Option<String>) -> String {
+
+    // make sure only authorized principals can call this function
+    let caller_principal = caller();
+    AUTHORIZED_PRINCIPALS.with(|p| {
+        let authorized_principals = p.borrow();
+        if !authorized_principals.contains(&caller_principal) {
+            ic_cdk::trap("Unauthorized: the caller is not allowed to perform this action.");
+        }
+    });
+    
     let canister_id = Principal::from_text("jhfj2-iqaaa-aaaak-qddxq-cai").expect("Failed to create Principal");
     let mut client = CLIENT.clone();
     let payment: Vec<_> = PAYMENT_STORE.with(|payments| payments.borrow().values().cloned().collect());

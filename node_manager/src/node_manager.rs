@@ -174,6 +174,15 @@ async fn get_emissions() -> Result<Vec<Node>, String> {
 // offset emissions from nodes based on a client
 #[update]
 async fn offset_emissions(mut client: Client, mut offset: f64, node_name: Option<String>) -> String {
+    // only authorized principals can call this function
+    let caller_principal = caller();
+    AUTHORIZED_PRINCIPALS.with(|p| {
+        let authorized_principals = p.borrow();
+        if !authorized_principals.contains(&caller_principal) {
+            ic_cdk::trap("Unauthorized: the caller is not allowed to perform this action.");
+        }
+    });
+    
     // If offset is 0, return early.
     if offset == 0.0 {
         return serde_json::to_string(&json!({"message": "No emissions offset because offset amount is 0"})).unwrap();
