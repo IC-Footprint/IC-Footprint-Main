@@ -18,6 +18,7 @@ use icrc_ledger_types::{
 use serde_derive::{Deserialize, Serialize};
 use crate::cawa_poster::send;
 use crate::cawa_poster::get_contribution_by_id;
+use std::collections::HashSet;
 use lazy_static::lazy_static;
 use serde_json::json;
 use serde_json::Value;
@@ -89,6 +90,7 @@ thread_local! {
     static LEDGER_CANISTER_ID: RefCell<String> = RefCell::new(String::default());
     static CURRENT_PAYMENT_ID: Cell<u64> = Cell::new(0);
     static CLIENT_STORE: RefCell<BTreeMap<String, Client>> = RefCell::default();
+    static AUTHORIZED_PRINCIPALS: RefCell<HashSet<Principal>> = RefCell::new(HashSet::new());
 }
 
 #[init]
@@ -299,6 +301,15 @@ pub async fn get_proof(contribution_id: String) -> String {
 // method to withdraw funds from the canister to wallet
 #[update(name = "withdraw")]
 async fn withdraw(wallet: Principal, amount: u64) -> String {
+    //check if caller is authorized
+    let caller = caller(); 
+    AUTHORIZED_PRINCIPALS.with(|p| {
+        let authorized_principals = p.borrow();
+        if !authorized_principals.contains(&caller) {
+            ic_cdk::trap("Unauthorized: the caller is not allowed to withdraw payments.");
+        }
+    });
+
     let ledger_canister_id = LEDGER_CANISTER_ID.with(|id| id.borrow().clone());
     match Principal::from_text(ledger_canister_id) {
         Ok(principal) => {

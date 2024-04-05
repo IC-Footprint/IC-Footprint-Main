@@ -119,6 +119,16 @@ pub fn deauthorize(principal: Principal) {
 
 #[update]
 pub async fn send(client: String, ticket_count: f64) -> String {
+
+    // check if the caller is authorized
+    let caller_principal = caller();
+    AUTHORIZED_PRINCIPALS.with(|p| {
+        let authorized_principals = p.borrow();
+        if !authorized_principals.contains(&caller_principal) {
+            ic_cdk::trap("Unauthorized: the caller is not allowed to send contributions.");
+        }
+    });
+    
     let host = "api.dev.cawa.tech";
     let url = "https://api.dev.cawa.tech/api/v1/contribution/prepaid";
     let project_id = "018aa416-3fab-46c1-b9c1-6fab067b70b7";
