@@ -25,9 +25,10 @@ use serde_json::Value;
 
 type PaymentStore = BTreeMap<u64, Payment>;
 
-#[derive(CandidType, Serialize, Deserialize, Clone, Debug, Hash, PartialEq)]
+#[derive(CandidType, Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Conf {
     ledger_canister_id: Principal,
+    ticket_price: f64,
 }
 
 #[derive(Clone, Debug, Default, CandidType, Serialize, Deserialize)]
@@ -86,7 +87,7 @@ lazy_static! {
 
 thread_local! {
     static PAYMENT_STORE: RefCell<PaymentStore> = RefCell::default();
-    static TICKET_PRICE: Cell<f64> = Cell::new(1.0);
+    static TICKET_PRICE: Cell<f64> = Cell::new(0.0);
     static LEDGER_CANISTER_ID: RefCell<String> = RefCell::new(String::default());
     static CURRENT_PAYMENT_ID: Cell<u64> = Cell::new(0);
     static CLIENT_STORE: RefCell<BTreeMap<String, Client>> = RefCell::default();
@@ -95,7 +96,7 @@ thread_local! {
 
 #[init]
 fn init(conf: Conf) {
-    // TICKET_PRICE.set(conf.ticket_price);
+    TICKET_PRICE.set(conf.ticket_price);
     LEDGER_CANISTER_ID.set(conf.ledger_canister_id.to_string());
 }
 
