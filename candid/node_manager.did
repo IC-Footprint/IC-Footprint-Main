@@ -36,4 +36,6 @@ service : {
   get_emissions: () -> (GetEmissionsResponse);
   offset_emissions: (Client, float64, opt text) -> (text);
   get_offset_emissions: (SimpleClient, Payment) -> ();
+  get_node_offset_emissions: (text) -> (text) query;
+  get_client_offset_emissions: (text) -> (text) query;
 }

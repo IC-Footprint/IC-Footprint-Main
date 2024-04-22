@@ -1,5 +1,4 @@
 type Conf = record {
-  ticket_price : float64;
   ledger_canister_id : principal;
 };
 type HttpHeader = record { value : text; name : text };
@@ -39,4 +38,5 @@ service : (Conf) -> {
   getPurchasesByNodeId: (text) -> (vec Payment) query;
   get_proof: (text) -> (text);
   withdraw: (principal, nat64) -> (text);
+  setTicketPrice: (float64) -> ();
 }

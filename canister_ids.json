@@ -1,18 +1,9 @@
 {
-  "escrow_manager": {
-    "ic": "icere-3qaaa-aaaal-adutq-cai"
-  },
   "esg_wallet": {
-    "ic": "xsv4a-5aaaa-aaaak-qib5a-cai"
+    "ic": "o7tg7-xaaaa-aaaak-qidba-cai"
   },
-  "node_escrow": {
-    "ic": "g4ndo-4qaaa-aaaal-advrq-cai"
-  },
-  "node_escrow_4d2sj-eqwzi-m7s5g-uj33s-wieqq-kgzyk-qzywl-ptltz-7zryd-sdbsc-uqe": {
-    "ic": "gjksd-5yaaa-aaaal-advsa-cai"
-  },
-  "node_escrow_wy5dm-dyvr3-wpi3g-d4xcd-6paqv-75bb5-5it3l-ovbv6-botde-7dlof-qae": {
-    "ic": "golux-qaaaa-aaaal-advsq-cai"
+  "frontend": {
+    "ic": "owqnd-biaaa-aaaak-qidaq-cai"
   },
   "node_manager": {
     "ic": "jhfj2-iqaaa-aaaak-qddxq-cai"

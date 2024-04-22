@@ -90,10 +90,10 @@ pub fn authorize(principal: Principal) {
     let caller_principal = caller();
 
     AUTHORIZED_PRINCIPALS.with(|p| {
-        let authorized_principals = p.borrow();
-
+        let mut authorized_principals = p.borrow_mut();
+    
         if authorized_principals.is_empty() || authorized_principals.contains(&caller_principal) {
-            AUTHORIZED_PRINCIPALS.with(|p| p.borrow_mut().insert(principal));
+            authorized_principals.insert(principal);
         } else {
             ic_cdk::trap("Unauthorized: the caller is not allowed to set the API key.");
         }
@@ -123,15 +123,17 @@ pub async fn send(client: String, ticket_count: f64) -> String {
     // check if the caller is authorized
     let caller_principal = caller();
     AUTHORIZED_PRINCIPALS.with(|p| {
-        let authorized_principals = p.borrow();
-        if !authorized_principals.contains(&caller_principal) {
-            ic_cdk::trap("Unauthorized: the caller is not allowed to send contributions.");
-        }
+       let authorized_principals = p.borrow();
+        // print the caller principal
+    //    ic_cdk::api::print(format!("Caller principal: {:?}", caller_principal));
+    if !authorized_principals.is_empty() || !authorized_principals.contains(&caller_principal) {
+           ic_cdk::trap("Unauthorized: the caller is not allowed to send contributions.");
+       }
     });
     
-    let host = "api.dev.cawa.tech";
-    let url = "https://api.dev.cawa.tech/api/v1/contribution/prepaid";
-    let project_id = "018aa416-3fab-46c1-b9c1-6fab067b70b7";
+    let host = "api.cawa.tech";
+    let url = "https://api.cawa.tech/api/v1/contribution/prepaid";
+    let project_id = "018828f6-8718-4550-9c6e-83a0fa52402d";
     let api_key = API_KEY.with(|k| k.borrow().clone());
     
     let ticket_count_u64 = ticket_count as u64;
@@ -196,6 +198,15 @@ pub async fn send(client: String, ticket_count: f64) -> String {
             .expect("Transformed response is not UTF-8 encoded.");
 
             ic_cdk::api::print(format!("Response from cawa: {}", str_body));
+            
+            // Check if the response status code indicates an error
+            if response.status >= 400u32 && response.status < 600u32 {
+                // Parse the error message from the response body
+                let parsed: serde_json::Value = serde_json::from_str(&str_body)
+                    .expect("Error response is not well-formatted JSON");
+                let error_message = parsed["error"].as_str().unwrap_or("Unknown error");
+                ic_cdk::trap(&format!("CAWA API error: {:?}", error_message));
+            }
         
         // Parse the JSON response
         let parsed: serde_json::Value = serde_json::from_str(&str_body)
@@ -247,7 +258,7 @@ fn transform(raw: TransformArgs) -> HttpResponse {
 #[update]
 pub async fn get_contributions() -> String {
     let api_key = API_KEY.with(|k| k.borrow().clone());
-    let url = "https://api.dev.cawa.tech/api/v1/contribution";
+    let url = "https://api.cawa.tech/api/v1/contribution";
 
     let request = CanisterHttpRequestArgument {  
         url: url.to_string(),  
@@ -289,7 +300,7 @@ pub async fn get_contributions() -> String {
 #[update]
 pub async fn get_contribution_by_entity(node_id: String) -> String {
    let api_key = API_KEY.with(|k| k.borrow().clone());
-   let url = format!("https://api.dev.cawa.tech/api/v1/contribution?entity=cawa%2B{}@carboncrowd.io",node_id);
+   let url = format!("https://api.cawa.tech/api/v1/contribution?entity=cawa%2B{}@carboncrowd.io",node_id);
 
     let request = CanisterHttpRequestArgument {  
      url: url.to_string(),  
@@ -330,7 +341,7 @@ pub async fn get_contribution_by_entity(node_id: String) -> String {
 #[update]
 pub async fn get_contribution_by_id(contribution_id: String) -> String {
     let api_key = API_KEY.with(|k| k.borrow().clone());
-    let url = format!("https://api.dev.cawa.tech/api/v1/contribution?id={}",contribution_id);
+    let url = format!("https://api.cawa.tech/api/v1/contribution?id={}",contribution_id);
 
     let request = CanisterHttpRequestArgument {  
      url: url.to_string(),  

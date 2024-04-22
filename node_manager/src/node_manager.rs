@@ -13,7 +13,7 @@ use candid::{CandidType};
 use serde_json::json;
 use serde_derive::{Deserialize, Serialize};
 
-#[derive(CandidType, Serialize, Deserialize)]
+#[derive(CandidType, Serialize, Deserialize, Clone)]
 struct Node {
     name: String,
     totalEmissions: f64,
@@ -46,6 +46,7 @@ struct Payment {
 thread_local! {  
     static API_KEY: RefCell<String> = RefCell::new(String::new());
     static AUTHORIZED_PRINCIPALS: RefCell<HashSet<Principal>> = RefCell::new(HashSet::new());
+    static NODES: RefCell<Vec<Node>> = RefCell::new(Vec::new());
 }
 
 #[update]
@@ -173,12 +174,12 @@ async fn get_emissions() -> Result<Vec<Node>, String> {
 
 // offset emissions from nodes based on a client
 #[update]
-async fn offset_emissions(mut client: Client, mut offset: f64, node_name: Option<String>) -> String {
+async fn offset_emissions(mut client: Client, mut offset: f64, node_name: Option<String>) -> String{
     // only authorized principals can call this function
     let caller_principal = caller();
     AUTHORIZED_PRINCIPALS.with(|p| {
         let authorized_principals = p.borrow();
-        if !authorized_principals.contains(&caller_principal) {
+        if !authorized_principals.is_empty() || !authorized_principals.contains(&caller_principal) {
             ic_cdk::trap("Unauthorized: the caller is not allowed to perform this action.");
         }
     });
@@ -187,14 +188,31 @@ async fn offset_emissions(mut client: Client, mut offset: f64, node_name: Option
     if offset == 0.0 {
         return serde_json::to_string(&json!({"message": "No emissions offset because offset amount is 0"})).unwrap();
     }
+
     
     if let Some(name) = node_name {
         // The client specified a node_name.
+        // check if total emissions is 0
+        if client.nodes.iter().all(|n| n.totalEmissions == 0.0) {
+            return serde_json::to_string(&json!({"message": "No emissions offset because total emissions is 0"})).unwrap();
+        }
+        
         if let Some(node) = client.nodes.iter_mut().find(|n| n.name == name) {
             // Found the node, offset the emissions.
             let mut offset_for_this_node = offset.min(node.totalEmissions);
             node.totalEmissions -= offset_for_this_node;
             node.offsetEmissions += offset_for_this_node;
+
+            // store Node in the NODES thread local
+            NODES.with(|n| {
+                let mut nodes = n.borrow_mut();
+                if let Some(n) = nodes.iter_mut().find(|n| n.name == name) {
+                    n.totalEmissions = node.totalEmissions;
+                    n.offsetEmissions = node.offsetEmissions;
+                } else {
+                    nodes.push(node.clone());
+                }
+            });
         }
     } else {
         // The client didn't specify a node_name.
@@ -204,6 +222,17 @@ async fn offset_emissions(mut client: Client, mut offset: f64, node_name: Option
                 let offset_for_this_node = offset.min(node.totalEmissions);
                 node.totalEmissions -= offset_for_this_node;
                 node.offsetEmissions += offset_for_this_node;
+
+                // store Node in the NODES thread local
+                NODES.with(|n| {
+                    let mut nodes = n.borrow_mut();
+                    if let Some(n) = nodes.iter_mut().find(|n| n.name == node.name) {
+                        n.totalEmissions = node.totalEmissions;
+                        n.offsetEmissions = node.offsetEmissions;
+                    } else {
+                        nodes.push(node.clone());
+                    }
+                });
             }
         } else {
             // The client isn't attached to any nodes, select a random set of nodes and offset the emissions.
@@ -213,6 +242,17 @@ async fn offset_emissions(mut client: Client, mut offset: f64, node_name: Option
                 let offset_for_this_node = offset.min(node.totalEmissions);
                 node.totalEmissions -= offset_for_this_node;
                 node.offsetEmissions += offset_for_this_node;
+
+                // store Node in the NODES thread local
+                NODES.with(|n| {
+                    let mut nodes = n.borrow_mut();
+                    if let Some(n) = nodes.iter_mut().find(|n| n.name == node.name) {
+                        n.totalEmissions = node.totalEmissions;
+                        n.offsetEmissions = node.offsetEmissions;
+                    } else {
+                        nodes.push(node.clone());
+                    }
+                });
             }
         }
     }
@@ -272,6 +312,33 @@ async fn get_offset_emissions(simple_client: SimpleClient, payment: Vec<Payment>
             format!("Error getting emissions: {}", e)
         }
     }
+}
+
+// get offset emissions for a node
+#[query]
+fn get_node_offset_emissions(node_name: String) -> String {
+    NODES.with(|n| {
+        let nodes = n.borrow();
+        let node = nodes.iter().find(|n| n.name == node_name);
+        match node {
+            Some(node) => {
+                serde_json::to_string(&node).unwrap()
+            },
+            None => {
+                format!("Node {} not found", node_name)
+            }
+        }
+    })
+}
+
+// get offset emissions for a client
+#[query]
+fn get_client_offset_emissions(client_name: String) -> String {
+    NODES.with(|n| {
+        let nodes = n.borrow();
+        let client_nodes: Vec<Node> = nodes.iter().filter(|n| n.name.starts_with(&client_name)).cloned().collect();
+        serde_json::to_string(&client_nodes).unwrap()
+    })
 }
 
 export_candid!();

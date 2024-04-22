@@ -28,7 +28,7 @@ type PaymentStore = BTreeMap<u64, Payment>;
 #[derive(CandidType, Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Conf {
     ledger_canister_id: Principal,
-    ticket_price: f64,
+    // ticket_price: f64,
 }
 
 #[derive(Clone, Debug, Default, CandidType, Serialize, Deserialize)]
@@ -80,14 +80,14 @@ lazy_static! {
 }
 lazy_static! {
     static ref CLIENT: Client = Client {
-        name: "OpenChat".to_string(),
+        name: "openchat".to_string(),
         node_ids: NODES.clone(),
     };
 }
 
 thread_local! {
     static PAYMENT_STORE: RefCell<PaymentStore> = RefCell::default();
-    static TICKET_PRICE: Cell<f64> = Cell::new(0.0);
+    static TICKET_PRICE: Cell<f64> = Cell::new(1.0);
     static LEDGER_CANISTER_ID: RefCell<String> = RefCell::new(String::default());
     static CURRENT_PAYMENT_ID: Cell<u64> = Cell::new(0);
     static CLIENT_STORE: RefCell<BTreeMap<String, Client>> = RefCell::default();
@@ -96,7 +96,7 @@ thread_local! {
 
 #[init]
 fn init(conf: Conf) {
-    TICKET_PRICE.set(conf.ticket_price);
+    // TICKET_PRICE.set(conf.ticket_price);
     LEDGER_CANISTER_ID.set(conf.ledger_canister_id.to_string());
 }
 
@@ -177,7 +177,7 @@ async fn register_payment(ticket_count: u64, nodeId: Option<String>) -> String {
                                 if !CLIENT.node_ids.contains(&node_id) {
                                 // if not create a new client for these nodes
                                 let client1 = Client {
-                                    name: "bkyz2-fmaaa-aaaaa-qaaaq-cai".to_string(),
+                                    name: "nodes".to_string(),
                                     node_ids: vec![node_id.to_string()],
                                 };
                                 contribution_id = send(client1.name.clone(), ticket_count as f64).await;
@@ -203,6 +203,8 @@ async fn register_payment(ticket_count: u64, nodeId: Option<String>) -> String {
                                 payment.clone(),
                             )
                         });
+
+                        let _ = set_offset_emissions(nodeId).await;
 
                         // Return the payment struct as a JSON string
                         return serde_json::to_string(&payment).unwrap();
@@ -257,7 +259,7 @@ async fn set_offset_emissions(nodeId: Option<String>) -> String {
     let caller_principal = caller();
     AUTHORIZED_PRINCIPALS.with(|p| {
         let authorized_principals = p.borrow();
-        if !authorized_principals.contains(&caller_principal) {
+        if !authorized_principals.is_empty() || !authorized_principals.contains(&caller_principal) {
             ic_cdk::trap("Unauthorized: the caller is not allowed to perform this action.");
         }
     });
@@ -267,11 +269,21 @@ async fn set_offset_emissions(nodeId: Option<String>) -> String {
     let payment: Vec<_> = PAYMENT_STORE.with(|payments| payments.borrow().values().cloned().collect());
     
     if let Some(ref node_id) = nodeId {
-        if !CLIENT.node_ids.contains(&node_id) {
-            let client = Client {
-                name: "bkyz2-fmaaa-aaaaa-qaaaq-cai".to_string(),
-                node_ids: vec![node_id.to_string()],
-        };
+        // check if the node_id is a specified string
+        if node_id == "eq6en-6jqla-fbu5s-daskr-h6hx2-376n5-iqabl-qgrng-gfqmv-n3yjr-mqe" {
+            // set client to Openchat
+            client = CLIENT.clone();
+        }
+        else {
+            // set up a new client for nodes that are not Openchat
+            // check if the node_id is not in the list of node_ids for client Openchat
+            if !CLIENT.node_ids.contains(&node_id) {
+                // if not create a new client for these nodes
+                client = Client {
+                    name: "nodes".to_string(),
+                    node_ids: vec![node_id.to_string()],
+                };
+            }
     }
     }
     match ic_cdk::api::call::call::<(Client, Vec<Payment>, Option<String>), (String,)>(canister_id, "get_offset_emissions", (client, payment, None)).await {
@@ -281,16 +293,16 @@ async fn set_offset_emissions(nodeId: Option<String>) -> String {
 }
 
 #[query(name = "getPurchasesByNodeId")]
-fn get_purchases_by_node_id(node_id: String) -> Vec<Payment> {{
+fn get_purchases_by_node_id(node_id: String) -> Vec<Payment> {
     let node_id_clone = node_id.clone();
-    PAYMENT_STORE.with(|store| {{
+    PAYMENT_STORE.with(|store| {
         store.borrow()
             .values()
             .cloned()
             .filter(|payment| payment.node_id.as_ref() == Some(&node_id_clone))
             .collect()
-    }})
-}}
+    })
+}
 
 #[update(name = "get_proof")]
 pub async fn get_proof(contribution_id: String) -> String {
@@ -365,6 +377,34 @@ async fn withdraw(wallet: Principal, amount: u64) -> String {
         Err(err) => return serde_json::to_string(&json!({"error": err.to_string()})).unwrap(),
     }
 }
+
+// set the ticket price
+#[update(name = "setTicketPrice")]
+fn set_ticket_price(price: f64) {
+    // make sure only authorized principals can call this function
+    let caller_principal = caller();
+    AUTHORIZED_PRINCIPALS.with(|p| {
+        let authorized_principals = p.borrow();
+        if !authorized_principals.is_empty() || !authorized_principals.contains(&caller_principal) {
+            ic_cdk::trap("Unauthorized: the caller is not allowed to perform this action.");
+        }
+    });
+    TICKET_PRICE.set(price);
+}
+
+// delete all payment data
+// #[update(name = "deletePayment")]
+// fn delete_payment() {
+//     // make sure only authorized principals can call this function
+//     let caller_principal = caller();
+//      AUTHORIZED_PRINCIPALS.with(|p| {
+//          let authorized_principals = p.borrow();
+//          if !authorized_principals.is_empty() || !authorized_principals.contains(&caller_principal) {
+//              ic_cdk::trap("Unauthorized: the caller is not allowed to perform this action.");
+//          }
+//      });
+//     PAYMENT_STORE.with(|store| store.borrow_mut().clear());
+// }
 
 
 export_candid!();
