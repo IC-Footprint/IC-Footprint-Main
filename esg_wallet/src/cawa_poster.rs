@@ -121,15 +121,15 @@ pub fn deauthorize(principal: Principal) {
 pub async fn send(client: String, ticket_count: f64) -> String {
 
     // check if the caller is authorized
-    let caller_principal = caller();
-    AUTHORIZED_PRINCIPALS.with(|p| {
-       let authorized_principals = p.borrow();
-        // print the caller principal
-    //    ic_cdk::api::print(format!("Caller principal: {:?}", caller_principal));
-    if !authorized_principals.is_empty() || !authorized_principals.contains(&caller_principal) {
-           ic_cdk::trap("Unauthorized: the caller is not allowed to send contributions.");
-       }
+    let caller = caller(); 
+    let is_authorized = AUTHORIZED_PRINCIPALS.with(|p| {
+        let authorized_principals = p.borrow();
+        authorized_principals.is_empty() || authorized_principals.contains(&caller)
     });
+
+    if !is_authorized {
+        return serde_json::to_string(&json!({"error": "Unauthorized: the caller is not allowed to perform this action."})).unwrap();
+    }
     
     let host = "api.cawa.tech";
     let url = "https://api.cawa.tech/api/v1/contribution/prepaid";
@@ -199,14 +199,16 @@ pub async fn send(client: String, ticket_count: f64) -> String {
 
             ic_cdk::api::print(format!("Response from cawa: {}", str_body));
             
-            // Check if the response status code indicates an error
-            if response.status >= 400u32 && response.status < 600u32 {
-                // Parse the error message from the response body
-                let parsed: serde_json::Value = serde_json::from_str(&str_body)
-                    .expect("Error response is not well-formatted JSON");
-                let error_message = parsed["error"].as_str().unwrap_or("Unknown error");
-                ic_cdk::trap(&format!("CAWA API error: {:?}", error_message));
-            }
+        // Check if the response status code indicates an error
+        if response.status >= 400u32 && response.status < 600u32 {
+            // Parse the error message from the response body
+            let parsed: serde_json::Value = match serde_json::from_str(&str_body) {
+                Ok(value) => value,
+                Err(e) => ic_cdk::trap(&format!("Failed to parse error response as JSON: {:?}", e)),
+            };
+            let error_message = parsed["error"].as_str().unwrap_or("Unknown error");
+            ic_cdk::trap(&format!("CAWA API error: {:?}", error_message));
+        }
         
         // Parse the JSON response
         let parsed: serde_json::Value = serde_json::from_str(&str_body)

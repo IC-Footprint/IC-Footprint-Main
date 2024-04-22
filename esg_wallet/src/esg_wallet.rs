@@ -204,7 +204,7 @@ async fn register_payment(ticket_count: u64, nodeId: Option<String>) -> String {
                             )
                         });
 
-                        let _ = set_offset_emissions(nodeId).await;
+                        // let _ = set_offset_emissions(nodeId).await;
 
                         // Return the payment struct as a JSON string
                         return serde_json::to_string(&payment).unwrap();
@@ -256,13 +256,16 @@ fn post_upgrade() {
 async fn set_offset_emissions(nodeId: Option<String>) -> String {
 
     // make sure only authorized principals can call this function
-    let caller_principal = caller();
-    AUTHORIZED_PRINCIPALS.with(|p| {
+    let caller = caller(); 
+    let is_authorized = AUTHORIZED_PRINCIPALS.with(|p| {
         let authorized_principals = p.borrow();
-        if !authorized_principals.is_empty() || !authorized_principals.contains(&caller_principal) {
-            ic_cdk::trap("Unauthorized: the caller is not allowed to perform this action.");
-        }
+        authorized_principals.is_empty() || authorized_principals.contains(&caller)
     });
+
+    if !is_authorized {
+        return serde_json::to_string(&json!({"error": "Unauthorized: the caller is not allowed to perform this action."})).unwrap();
+    }
+
     
     let canister_id = Principal::from_text("jhfj2-iqaaa-aaaak-qddxq-cai").expect("Failed to create Principal");
     let mut client = CLIENT.clone();
@@ -326,12 +329,14 @@ pub async fn get_proof(contribution_id: String) -> String {
 async fn withdraw(wallet: Principal, amount: u64) -> String {
     //check if caller is authorized
     let caller = caller(); 
-    AUTHORIZED_PRINCIPALS.with(|p| {
+    let is_authorized = AUTHORIZED_PRINCIPALS.with(|p| {
         let authorized_principals = p.borrow();
-        if !authorized_principals.contains(&caller) {
-            ic_cdk::trap("Unauthorized: the caller is not allowed to withdraw payments.");
-        }
+        authorized_principals.is_empty() || authorized_principals.contains(&caller)
     });
+
+    if !is_authorized {
+        return serde_json::to_string(&json!({"error": "Unauthorized: the caller is not allowed to perform this action."})).unwrap();
+    }
 
     let ledger_canister_id = LEDGER_CANISTER_ID.with(|id| id.borrow().clone());
     match Principal::from_text(ledger_canister_id) {
@@ -382,13 +387,16 @@ async fn withdraw(wallet: Principal, amount: u64) -> String {
 #[update(name = "setTicketPrice")]
 fn set_ticket_price(price: f64) {
     // make sure only authorized principals can call this function
-    let caller_principal = caller();
-    AUTHORIZED_PRINCIPALS.with(|p| {
+    let caller = caller(); 
+    let is_authorized = AUTHORIZED_PRINCIPALS.with(|p| {
         let authorized_principals = p.borrow();
-        if !authorized_principals.is_empty() || !authorized_principals.contains(&caller_principal) {
-            ic_cdk::trap("Unauthorized: the caller is not allowed to perform this action.");
-        }
+        authorized_principals.is_empty() || authorized_principals.contains(&caller)
     });
+
+    if !is_authorized {
+        return serde_json::to_string(&json!({"error": "Unauthorized: the caller is not allowed to perform this action."})).unwrap();
+    }
+
     TICKET_PRICE.set(price);
 }
 
@@ -396,13 +404,16 @@ fn set_ticket_price(price: f64) {
 // #[update(name = "deletePayment")]
 // fn delete_payment() {
 //     // make sure only authorized principals can call this function
-//     let caller_principal = caller();
-//      AUTHORIZED_PRINCIPALS.with(|p| {
-//          let authorized_principals = p.borrow();
-//          if !authorized_principals.is_empty() || !authorized_principals.contains(&caller_principal) {
-//              ic_cdk::trap("Unauthorized: the caller is not allowed to perform this action.");
-//          }
-//      });
+// let caller = caller(); 
+// let is_authorized = AUTHORIZED_PRINCIPALS.with(|p| {
+//     let authorized_principals = p.borrow();
+//     authorized_principals.is_empty() || authorized_principals.contains(&caller)
+// });
+
+// if !is_authorized {
+//     return serde_json::to_string(&json!({"error": "Unauthorized: the caller is not allowed to perform this action."})).unwrap();
+// }
+
 //     PAYMENT_STORE.with(|store| store.borrow_mut().clear());
 // }
 
