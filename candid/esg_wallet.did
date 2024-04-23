@@ -38,5 +38,6 @@ service : (Conf) -> {
   getPurchasesByNodeId: (text) -> (vec Payment) query;
   get_proof: (text) -> (text);
   withdraw: (principal, nat64) -> (text);
-  setTicketPrice: (float64) -> ();
+  setTicketPrice: (float64) -> (text);
+  deletePaymentsWithNoProof: () -> (text);
 }

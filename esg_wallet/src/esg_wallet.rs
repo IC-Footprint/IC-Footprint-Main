@@ -139,7 +139,7 @@ async fn register_payment(ticket_count: u64, nodeId: Option<String>) -> String {
                     subaccount: None,
                 },
                 to: Account {
-                    owner: id(),
+                    owner: Principal::from_text("p7fau-co6y6-lqstu-3i3z3-ujquv-bu7a2-ngent-b2j62-a3ctd-2uprh-tae").unwrap(),
                     subaccount: None,
                 },
                 amount: Nat::from(total_price as u64),
@@ -385,7 +385,7 @@ async fn withdraw(wallet: Principal, amount: u64) -> String {
 
 // set the ticket price
 #[update(name = "setTicketPrice")]
-fn set_ticket_price(price: f64) {
+fn set_ticket_price(price: f64) -> String {
     // make sure only authorized principals can call this function
     let caller = caller(); 
     let is_authorized = AUTHORIZED_PRINCIPALS.with(|p| {
@@ -398,6 +398,7 @@ fn set_ticket_price(price: f64) {
     }
 
     TICKET_PRICE.set(price);
+    "Ticket price set successfully".to_string() // Return a success message or handle it as needed
 }
 
 // delete all payment data
@@ -417,5 +418,38 @@ fn set_ticket_price(price: f64) {
 //     PAYMENT_STORE.with(|store| store.borrow_mut().clear());
 // }
 
+#[update(name = "deletePaymentsWithNoProof")]
+fn delete_payments_with_no_proof() -> String {
+    let caller = caller();
+    let is_authorized = AUTHORIZED_PRINCIPALS.with(|p| {
+        let authorized_principals = p.borrow();
+        authorized_principals.is_empty() || authorized_principals.contains(&caller)
+    });
+
+    if !is_authorized {
+        return serde_json::to_string(&json!({"error": "Unauthorized: the caller is not allowed to perform this action."})).unwrap();
+    }
+
+    let mut payments_deleted = 0;
+    PAYMENT_STORE.with(|store| {
+        let mut store_borrowed = store.borrow_mut();
+        // Create a vector of keys to delete to avoid borrowing issues
+        let keys_to_delete: Vec<_> = store_borrowed.iter()
+            .filter(|(_, payment)| payment.cawa_url == "Proof URL does not exist")
+            .map(|(key, _)| *key)
+            .collect();
+
+        for key in keys_to_delete {
+            store_borrowed.remove(&key);
+            payments_deleted += 1;
+        }
+    });
+
+    if payments_deleted > 0 {
+        format!("Deleted {} payments with 'Proof URL does not exist'.", payments_deleted)
+    } else {
+        "No payments found with 'Proof URL does not exist'.".to_string()
+    }
+}
 
 export_candid!();
