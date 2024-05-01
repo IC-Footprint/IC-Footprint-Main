@@ -12,6 +12,8 @@ use std::cell::RefCell;
 use ic_cdk::api::caller;
 use candid::Principal;
 use std::collections::HashSet;
+use serde_json::json;
+
 
 
 
@@ -19,7 +21,7 @@ use std::collections::HashSet;
 #[derive(Serialize, Deserialize)]
 struct Context {
     project_id: String,
-    ticket_count: u64,
+    ticket_count: f64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -89,10 +91,10 @@ pub fn authorize(principal: Principal) {
     let caller_principal = caller();
 
     AUTHORIZED_PRINCIPALS.with(|p| {
-        let authorized_principals = p.borrow();
-
+        let mut authorized_principals = p.borrow_mut();
+    
         if authorized_principals.is_empty() || authorized_principals.contains(&caller_principal) {
-            AUTHORIZED_PRINCIPALS.with(|p| p.borrow_mut().insert(principal));
+            authorized_principals.insert(principal);
         } else {
             ic_cdk::trap("Unauthorized: the caller is not allowed to set the API key.");
         }
@@ -116,13 +118,26 @@ pub fn deauthorize(principal: Principal) {
 }
 
 
-
 #[update]
-pub async fn send(node_id: String, ticket_count: u64) -> String {
-    let host = "api.dev.cawa.tech";
-    let url = "https://api.dev.cawa.tech/api/v1/contribution/prepaid";
-    let project_id = "018aa416-3fab-46c1-b9c1-6fab067b70b7";
+pub async fn send(client: String, ticket_count: f64) -> String {
+
+    // check if the caller is authorized
+    let caller = caller(); 
+    let is_authorized = AUTHORIZED_PRINCIPALS.with(|p| {
+        let authorized_principals = p.borrow();
+        authorized_principals.is_empty() || authorized_principals.contains(&caller)
+    });
+
+    if !is_authorized {
+        return serde_json::to_string(&json!({"error": "Unauthorized: the caller is not allowed to perform this action."})).unwrap();
+    }
+    
+    let host = "api.cawa.tech";
+    let url = "https://api.cawa.tech/api/v1/contribution/prepaid";
+    let project_id = "018828f6-8718-4550-9c6e-83a0fa52402d";
     let api_key = API_KEY.with(|k| k.borrow().clone());
+    
+    let ticket_count_u64 = ticket_count as u64;
    
 
     let idempotency_key = generate_uuid();
@@ -147,8 +162,8 @@ pub async fn send(node_id: String, ticket_count: u64) -> String {
 
 
     let request_body_json = ContributionRequest {
-        amount: ticket_count,
-        on_behalf_of: format!("cawa+{}@carboncrowd.io", node_id).to_string(),
+        amount: ticket_count_u64,
+        on_behalf_of: format!("cawa+{}@carboncrowd.io", client).to_string(),
         unit: "kilos".to_string(),
         currency: "EUR".to_string(),
         project: project_id.to_string(),
@@ -178,16 +193,38 @@ pub async fn send(node_id: String, ticket_count: u64) -> String {
         }),
     };
 
-    match http_request(request, 2_000_000_000).await {
+    match http_request(request, 21_000_000_000).await {
         Ok((response,)) => {
             let str_body = String::from_utf8(response.body)
-                .expect("Transformed response is not UTF-8 encoded.");
-            ic_cdk::api::print(format!("{:?}", str_body));
-            let result: String = format!(
-                "{}. See more info of the request sent at: {}/inspect",
-                str_body, url
-            );
-            result
+            .expect("Transformed response is not UTF-8 encoded.");
+
+            ic_cdk::api::print(format!("Response from cawa: {}", str_body));
+            
+        // Check if the response status code indicates an error
+        if response.status >= 400u32 && response.status < 600u32 {
+            // Parse the error message from the response body
+            let parsed: serde_json::Value = match serde_json::from_str(&str_body) {
+                Ok(value) => value,
+                Err(e) => ic_cdk::trap(&format!("Failed to parse error response as JSON: {:?}", e)),
+            };
+            let error_message = parsed["error"].as_str().unwrap_or("Unknown error");
+            ic_cdk::trap(&format!("CAWA API error: {:?}", error_message));
+        }
+        
+        // Parse the JSON response
+        let parsed: serde_json::Value = serde_json::from_str(&str_body)
+            .expect("JSON was not well-formatted");
+
+        // Extract the id field
+        let id_array = parsed["id"].as_array()
+            .expect("id field not found or not an array");
+
+        // Get the first element of the array
+        let id = id_array.get(0)
+            .and_then(|v| v.as_str())
+            .expect("id array is empty or contains non-string");
+
+        id.to_string()
         }
         Err((r, m)) => {
             let message =
@@ -222,9 +259,9 @@ fn transform(raw: TransformArgs) -> HttpResponse {
 
 
 #[update]
-async fn get_contributions() -> String {
+pub async fn get_contributions() -> String {
     let api_key = API_KEY.with(|k| k.borrow().clone());
-    let url = "https://api.dev.cawa.tech/api/v1/contribution";
+    let url = "https://api.cawa.tech/api/v1/contribution";
 
     let request = CanisterHttpRequestArgument {  
         url: url.to_string(),  
@@ -246,7 +283,7 @@ async fn get_contributions() -> String {
         ],  
        };
 
-       match http_request(request, 2_000_000_000).await {
+       match http_request(request, 21_000_000_000).await {
         Ok((response,)) => {
             let str_body = String::from_utf8(response.body)
                 .expect("Transformed response is not UTF-8 encoded.");
@@ -264,9 +301,9 @@ async fn get_contributions() -> String {
 
 
 #[update]
-async fn get_contribution_by_entity(node_id: String) -> String {
+pub async fn get_contribution_by_entity(node_id: String) -> String {
    let api_key = API_KEY.with(|k| k.borrow().clone());
-   let url = format!("https://api.dev.cawa.tech/api/v1/contribution?entity=cawa{}@carboncrowd.io",node_id);
+   let url = format!("https://api.cawa.tech/api/v1/contribution?entity=cawa%2B{}@carboncrowd.io",node_id);
 
     let request = CanisterHttpRequestArgument {  
      url: url.to_string(),  
@@ -288,7 +325,7 @@ async fn get_contribution_by_entity(node_id: String) -> String {
      ],  
     };
 
-    match http_request(request, 2_000_000_000).await {
+    match http_request(request, 21_000_000_000).await {
         Ok((response,)) => {
             let str_body = String::from_utf8(response.body)
                 .expect("Transformed response is not UTF-8 encoded.");
@@ -302,3 +339,46 @@ async fn get_contribution_by_entity(node_id: String) -> String {
         }
     }
 }
+
+// get contribution by id
+#[update]
+pub async fn get_contribution_by_id(contribution_id: String) -> String {
+    let api_key = API_KEY.with(|k| k.borrow().clone());
+    let url = format!("https://api.cawa.tech/api/v1/contribution?id={}",contribution_id);
+
+    let request = CanisterHttpRequestArgument {  
+     url: url.to_string(),  
+     method: HttpMethod::GET,  
+     body: None,   
+     max_response_bytes: None,  
+     transform: Some(TransformContext {  
+     function: TransformFunc(candid::Func {  
+     principal: ic_cdk::api::id(),  
+     method: "transform".to_string(),  
+     }),  
+     context: vec![],  
+     }),  
+     headers: vec![
+          HttpHeader {
+                name: "Authorization".to_string(),
+                value: format!("Bearer {}", api_key),
+          }
+     ],  
+    };
+
+    match http_request(request, 21_000_000_000).await {
+        Ok((response,)) => {
+            let str_body = String::from_utf8(response.body)
+                .expect("Transformed response is not UTF-8 encoded.");
+            str_body
+        }
+        Err((r, m)) => {
+            let message =
+                format!("The http_request resulted into error. RejectionCode: {r:?}, Error: {m}");
+
+            message
+        }
+    }
+}
+
+

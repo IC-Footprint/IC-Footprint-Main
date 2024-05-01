@@ -1,6 +1,0 @@
-type Result = variant { Ok; Err };
-type Result_1 = variant { Ok : principal; Err };
-service : {
-  addNodeEscrow : (text, principal) -> (Result);
-  getNodeEscrow : (text) -> (Result_1) query;
-}

@@ -1,0 +1,41 @@
+type HttpHeader = record { value : text; name : text };
+type HttpResponse = record {
+  status : nat;
+  body : vec nat8;
+  headers : vec HttpHeader;
+};
+type Node = record {
+  name: text;
+  totalEmissions: float64;
+  offsetEmissions: float64
+};
+type GetEmissionsResponse = variant {
+  Ok: vec Node;
+  Err: text;
+};
+type Client = record {
+  client : text;
+  nodes : opt vec text;
+};
+type SimpleClient = record {
+  name : text;
+  node_ids: vec text;
+};
+type Payment = record {
+  ticket_price : nat64;
+  payer : text;
+  block_height : nat;
+  ticket_count : nat64;
+  contribution_id: text;
+};
+type TransformArgs = record { context : vec nat8; response : HttpResponse };
+service : {
+  set_api_key: (text) -> ();
+  authorize: (principal) -> ();
+  deauthorize: (principal) -> ();
+  get_emissions: () -> (GetEmissionsResponse);
+  offset_emissions: (Client, float64, opt text) -> (text);
+  get_offset_emissions: (SimpleClient, Payment) -> ();
+  get_node_offset_emissions: (text) -> (text) query;
+  get_client_offset_emissions: (text) -> (text) query;
+}

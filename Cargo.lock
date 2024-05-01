@@ -282,14 +282,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
-name = "escrow_manager"
+name = "esg_wallet"
 version = "0.1.0"
 dependencies = [
  "candid",
  "ic-cdk",
  "icrc-ledger-types",
+ "lazy_static",
  "serde",
  "serde_derive",
+ "serde_json",
 ]
 
 [[package]]
@@ -533,7 +535,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4a24736216ec316047a1fc4252e27dabb04218aa4a3f37c6e7ddbf1f9782b54"
 
 [[package]]
-name = "node_escrow"
+name = "node_manager"
 version = "0.1.0"
 dependencies = [
  "candid",
