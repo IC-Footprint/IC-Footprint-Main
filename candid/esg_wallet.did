@@ -1,0 +1,43 @@
+type Conf = record {
+  ledger_canister_id : principal;
+};
+type HttpHeader = record { value : text; name : text };
+type HttpResponse = record {
+  status : nat;
+  body : vec nat8;
+  headers : vec HttpHeader;
+};
+type Payment = record {
+  ticket_price : float64;
+  payer : text;
+  block_height : nat;
+  ticket_count : float64;
+  cawa_url: text;
+  node_id: opt text;
+};
+type Client = record {
+  name: text;
+  node_ids: vec text;
+};
+type Result = variant { Ok; Err };
+type Result_1 = variant { Ok : principal; Err };
+type TransformArgs = record { context : vec nat8; response : HttpResponse };
+service : (Conf) -> {
+  getPrice : (float64) -> (float64) query;
+  getPurchases : () -> (vec Payment) query;
+  getTicketPrice : () -> (float64) query;
+  registerPayment: (nat64, opt text) -> (text);
+  set_api_key: (text) -> ();
+  authorize: (principal) -> ();
+  deauthorize: (principal) -> ();
+  send : (text, float64) -> (text);
+  get_contributions: () -> (text);
+  get_contribution_by_entity: (text) -> (text);
+  get_contribution_by_id: (text) -> (text);
+  setOffsetEmissions: (opt text) -> (text);
+  getPurchasesByNodeId: (text) -> (vec Payment) query;
+  get_proof: (text) -> (text);
+  withdraw: (principal, nat64) -> (text);
+  setTicketPrice: (float64) -> (text);
+  deletePaymentsWithNoProof: () -> (text);
+}

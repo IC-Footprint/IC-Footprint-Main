@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
 members = [
-    "node_escrow",
-    "escrow_manager"
+    "esg_wallet",
+    "node_manager"
 ]
