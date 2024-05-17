@@ -42,7 +42,9 @@ Sets offset emissions for a node. This method is public and can be called by any
 
 Withdraws payments. This method is public and can be called by any principal that is authorized.
 
-### Contribution Handling: 
+## Climate Asset Exchange:
+### Vendor 1 Cawa.tech
+
 #### cawa_poster.rs
 
 
