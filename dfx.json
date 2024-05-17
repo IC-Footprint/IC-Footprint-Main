@@ -50,7 +50,5 @@
         "node_compatibility": true
       }
     }
-  },
-  "dfx": "0.15.2",
-  "version": 1
+  }
 }

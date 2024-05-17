@@ -309,10 +309,13 @@ fn get_purchases_by_node_id(node_id: String) -> Vec<Payment> {
 
 #[update(name = "get_proof")]
 pub async fn get_proof(contribution_id: String) -> String {
-    let json = get_contribution_by_id(contribution_id).await;
+    let json = get_contribution_by_id(contribution_id.clone()).await;
     let data: Value = match serde_json::from_str(&json) {
         Ok(data) => data,
-        Err(_) => return "Proof URL does not exist".to_string(),
+        Err(e) => {
+            ic_cdk::println!("Error parsing JSON from Cawa: {:?}", e);
+            return "Error parsing JSON from Cawa".to_string();
+        },
     };
     if let Some(array) = data.as_array() {
         if !array.is_empty() {
@@ -321,6 +324,7 @@ pub async fn get_proof(contribution_id: String) -> String {
             }
         }
     }
+    ic_cdk::println!("Proof URL does not exist for contribution ID: {}", contribution_id);
     "Proof URL does not exist".to_string()
 }
 
