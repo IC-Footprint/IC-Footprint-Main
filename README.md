@@ -110,8 +110,6 @@ Selects a random set of nodes. This method is not public is only called within t
 
 # Set Up
 
-At the moment the [Node Management Canister](https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io/?id=jhfj2-iqaaa-aaaak-qddxq-cai) and the [ESG wallet](ttps://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io/?id=xsv4a-5aaaa-aaaak-qib5a-cai) are deployed on the mainnet. (However the cycles on my identity might not keep them up for long)
-
 To deploy the esg Wallet canister make sure to pass the ledger canister id as an argument. ie
 
 ```bash
