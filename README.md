@@ -1,4 +1,8 @@
-# Canister Setup
+# ESG Wallet
+
+Welcome to CarbonCrowd Escrow, a pioneering initiative leveraging blockchain technology to drive environmental sustainability. Our platform facilitates transparent and secure transactions, enabling individuals and organizations to offset emissions and contribute to a greener future
+
+## Canister Setup
 
 
 This setup is built around two main canisters: esg_wallet.rs and node_manager.rs.
