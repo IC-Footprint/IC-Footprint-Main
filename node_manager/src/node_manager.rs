@@ -16,8 +16,8 @@ use serde_derive::{Deserialize, Serialize};
 #[derive(CandidType, Serialize, Deserialize, Clone)]
 struct Node {
     name: String,
-    totalEmissions: f64,
-    offsetEmissions: f64,
+    total_emissions: f64,
+    offset_emissions: f64,
 }
 
 
@@ -42,11 +42,18 @@ struct Payment {
     pub contribution_id: String,
 }
 
+#[derive(CandidType, Serialize, Deserialize, Clone)]
+struct Project {
+    pub id: Vec<String>,
+    pub name: String,
+    pub icon: String,
+}
 
 thread_local! {  
     static API_KEY: RefCell<String> = RefCell::new(String::new());
     static AUTHORIZED_PRINCIPALS: RefCell<HashSet<Principal>> = RefCell::new(HashSet::new());
     static NODES: RefCell<Vec<Node>> = RefCell::new(Vec::new());
+    static PROJECTS: RefCell<Vec<Project>> = RefCell::new(vec![]);
 }
 
 #[update]
@@ -155,11 +162,11 @@ async fn get_emissions() -> Result<Vec<Node>, String> {
             .map_err(|e| format!("Failed to parse JSON: {}", e))?;
         let nodes: Vec<Node> = json.as_array().unwrap().iter().map(|node| {
         let name = node["name"].as_str().unwrap().to_string();
-        let totalEmissions = node["totalEmissions"].as_f64().unwrap();
+        let total_emissions = node["total_emissions"].as_f64().unwrap();
         Node {
             name,
-            totalEmissions,
-            offsetEmissions: 0.0,
+            total_emissions,
+            offset_emissions: 0.0,
         }
     }).collect();
     Ok(nodes)
@@ -196,22 +203,22 @@ async fn offset_emissions(mut client: Client, mut offset: f64, node_name: Option
     if let Some(name) = node_name {
         // The client specified a node_name.
         // check if total emissions is 0
-        if client.nodes.iter().all(|n| n.totalEmissions == 0.0) {
+        if client.nodes.iter().all(|n| n.total_emissions == 0.0) {
             return serde_json::to_string(&json!({"message": "No emissions offset because total emissions is 0"})).unwrap();
         }
         
         if let Some(node) = client.nodes.iter_mut().find(|n| n.name == name) {
             // Found the node, offset the emissions.
-            let mut offset_for_this_node = offset.min(node.totalEmissions);
-            node.totalEmissions -= offset_for_this_node;
-            node.offsetEmissions += offset_for_this_node;
+            let mut offset_for_this_node = offset.min(node.total_emissions);
+            node.total_emissions -= offset_for_this_node;
+            node.offset_emissions += offset_for_this_node;
 
             // store Node in the NODES thread local
             NODES.with(|n| {
                 let mut nodes = n.borrow_mut();
                 if let Some(n) = nodes.iter_mut().find(|n| n.name == name) {
-                    n.totalEmissions = node.totalEmissions;
-                    n.offsetEmissions = node.offsetEmissions;
+                    n.total_emissions = node.total_emissions;
+                    n.offset_emissions = node.offset_emissions;
                 } else {
                     nodes.push(node.clone());
                 }
@@ -222,16 +229,16 @@ async fn offset_emissions(mut client: Client, mut offset: f64, node_name: Option
         if !client.nodes.is_empty() {
             // The client is attached to some nodes, offset the emissions.
             for node in &mut client.nodes {
-                let offset_for_this_node = offset.min(node.totalEmissions);
-                node.totalEmissions -= offset_for_this_node;
-                node.offsetEmissions += offset_for_this_node;
+                let offset_for_this_node = offset.min(node.total_emissions);
+                node.total_emissions -= offset_for_this_node;
+                node.offset_emissions += offset_for_this_node;
 
                 // store Node in the NODES thread local
                 NODES.with(|n| {
                     let mut nodes = n.borrow_mut();
                     if let Some(n) = nodes.iter_mut().find(|n| n.name == node.name) {
-                        n.totalEmissions = node.totalEmissions;
-                        n.offsetEmissions = node.offsetEmissions;
+                        n.total_emissions = node.total_emissions;
+                        n.offset_emissions = node.offset_emissions;
                     } else {
                         nodes.push(node.clone());
                     }
@@ -242,16 +249,16 @@ async fn offset_emissions(mut client: Client, mut offset: f64, node_name: Option
             let nodes_future = select_random_nodes(); 
             let nodes = nodes_future.await;
             for mut node in nodes {
-                let offset_for_this_node = offset.min(node.totalEmissions);
-                node.totalEmissions -= offset_for_this_node;
-                node.offsetEmissions += offset_for_this_node;
+                let offset_for_this_node = offset.min(node.total_emissions);
+                node.total_emissions -= offset_for_this_node;
+                node.offset_emissions += offset_for_this_node;
 
                 // store Node in the NODES thread local
                 NODES.with(|n| {
                     let mut nodes = n.borrow_mut();
                     if let Some(n) = nodes.iter_mut().find(|n| n.name == node.name) {
-                        n.totalEmissions = node.totalEmissions;
-                        n.offsetEmissions = node.offsetEmissions;
+                        n.total_emissions = node.total_emissions;
+                        n.offset_emissions = node.offset_emissions;
                     } else {
                         nodes.push(node.clone());
                     }
@@ -266,17 +273,17 @@ async fn offset_emissions(mut client: Client, mut offset: f64, node_name: Option
 
 #[update]
 fn offset_from_nodes(mut nodes: Vec<Node>, mut offset: f64) {
-    // Sort the nodes from highest to lowest totalEmissions.
-    nodes.sort_by(|a, b| b.totalEmissions.partial_cmp(&a.totalEmissions).unwrap());
+    // Sort the nodes from highest to lowest total_emissions.
+    nodes.sort_by(|a, b| b.total_emissions.partial_cmp(&a.total_emissions).unwrap());
 
     for mut node in nodes {
         if offset <= 0.0 {
             break;
         }
 
-        let offset_for_this_node = offset.min(node.totalEmissions);
-        node.totalEmissions -= offset_for_this_node;
-        node.offsetEmissions += offset_for_this_node;
+        let offset_for_this_node = offset.min(node.total_emissions);
+        node.total_emissions -= offset_for_this_node;
+        node.offset_emissions += offset_for_this_node;
         offset -= offset_for_this_node;
     }
 }
@@ -286,12 +293,12 @@ async fn select_random_nodes() -> Vec<Node> {
     let emissions_result = get_emissions().await;
     
     let mut nodes: Vec<Node> = match emissions_result {
-        Ok(emissions) => emissions.into_iter().filter(|node| node.totalEmissions > 0.0).collect(),
+        Ok(emissions) => emissions.into_iter().filter(|node| node.total_emissions > 0.0).collect(),
         Err(_) => vec![],  // Handle the error appropriately.
     };
     
-    // Sort the nodes from highest to lowest totalEmissions.
-    nodes.sort_by(|a, b| b.totalEmissions.partial_cmp(&a.totalEmissions).unwrap());
+    // Sort the nodes from highest to lowest total_emissions.
+    nodes.sort_by(|a, b| b.total_emissions.partial_cmp(&a.total_emissions).unwrap());
     
     nodes
 }
@@ -342,6 +349,28 @@ fn get_client_offset_emissions(client_name: String) -> String {
         let client_nodes: Vec<Node> = nodes.iter().filter(|n| n.name.starts_with(&client_name)).cloned().collect();
         serde_json::to_string(&client_nodes).unwrap()
     })
+}
+
+#[query]
+fn get_projects() -> Vec<Project> {
+    PROJECTS.with(|p| p.borrow().clone())
+}
+
+#[update]
+// method that adds projects to the project list
+fn add_project(project: Project) {
+    PROJECTS.with(|p| {
+        let mut projects = p.borrow_mut();
+        projects.push(project);
+    });
+}
+
+#[update]
+pub fn remove_project(project_id: String) {
+    PROJECTS.with(|p| {
+        let mut projects = p.borrow_mut();
+        projects.retain(|project| !project.id.contains(&project_id));
+    });
 }
 
 export_candid!();

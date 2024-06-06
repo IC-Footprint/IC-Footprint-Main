@@ -1,0 +1,28 @@
+type CanisterSettings = record {
+  freezing_threshold : nat;
+  controllers : vec principal;
+  memory_allocation : nat;
+  compute_allocation : nat;
+};
+type CanisterStatus = variant { Running };
+type CanisterStatusResponse = record {
+  status : CanisterStatus;
+  memory_size : nat;
+  cycles : nat;
+  settings : CanisterSettings;
+  module_hash : opt vec nat8;
+};
+type RejectionCode = variant {
+  NoError;
+  CanisterError;
+  SysTransient;
+  DestinationInvalid;
+  Unknown;
+  SysFatal;
+  CanisterReject;
+};
+type Result = variant {
+  Ok : record { CanisterStatusResponse };
+  Err : record { RejectionCode; text };
+};
+service : { get_canister_status : (principal) -> (Result) }
