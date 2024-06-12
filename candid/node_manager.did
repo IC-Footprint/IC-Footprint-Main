@@ -17,7 +17,7 @@ type Payment = record {
   ticket_count : nat64;
   contribution_id : text;
 };
-type Project = record { id : vec text; icon : text; name : text };
+type Project = record { id : vec text; icon : opt text; name : text };
 type Result = variant { Ok : vec Node; Err : text };
 type SimpleClient = record { name : text; node_ids : vec text };
 type TransformArgs = record { context : vec nat8; response : HttpResponse };
@@ -25,6 +25,7 @@ service : {
   add_project : (Project) -> ();
   authorize : (principal) -> ();
   deauthorize : (principal) -> ();
+  delete_all_projects : () -> ();
   get_client_offset_emissions : (text) -> (text) query;
   get_emissions : () -> (Result);
   get_node_offset_emissions : (text) -> (text) query;

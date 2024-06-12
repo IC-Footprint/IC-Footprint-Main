@@ -4,4 +4,5 @@ members = [
     "esg_wallet",
     "node_manager",
     "cycles_assessment_manager",
+    "blackhole"
 ]

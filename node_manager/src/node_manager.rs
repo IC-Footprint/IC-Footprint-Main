@@ -46,7 +46,7 @@ struct Payment {
 struct Project {
     pub id: Vec<String>,
     pub name: String,
-    pub icon: String,
+    pub icon: Option<String>,
 }
 
 thread_local! {  
@@ -365,11 +365,33 @@ fn add_project(project: Project) {
     });
 }
 
+// retrieve icons for specific projects
+// #[query]
+// fn get_project_icon(project_id: String) -> Option<String> {
+//     PROJECTS.with(|p| {
+//         let projects = p.borrow();
+//         projects
+//             .iter()
+//             .find(|project| project.id.contains(&project_id))
+//             .and_then(|project| project.icon.clone())
+//     })
+// }
+
+
 #[update]
 pub fn remove_project(project_id: String) {
     PROJECTS.with(|p| {
         let mut projects = p.borrow_mut();
         projects.retain(|project| !project.id.contains(&project_id));
+    });
+}
+
+// delete all projects
+#[update]
+fn delete_all_projects() {
+    PROJECTS.with(|p| {
+        let mut projects = p.borrow_mut();
+        projects.clear();
     });
 }
 

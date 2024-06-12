@@ -33,7 +33,7 @@ struct CanisterStatusRequest {
 
 #[update]
 async fn get_canister_status(canister_id: Principal) -> CallResult<(CanisterStatusResponse,)> {
-    let black_hole_canister_id = Principal::from_text("e3mmv-5qaaa-aaaah-aadma-cai").unwrap();
+    let black_hole_canister_id = Principal::from_text("bw4dl-smaaa-aaaaa-qaacq-cai").unwrap();
 
     let request = CanisterStatusRequest {
         canister_id: canister_id,
