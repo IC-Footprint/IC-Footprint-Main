@@ -33,6 +33,7 @@ service : {
   get_projects : () -> (vec Project) query;
   offset_emissions : (Client, float64, opt text) -> (text);
   offset_from_nodes : (vec Node, float64) -> ();
+  registerPayment : (nat64) -> (text);
   remove_project : (text) -> ();
   select_random_nodes : () -> (vec Node);
   set_api_key : (text) -> ();

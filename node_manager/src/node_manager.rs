@@ -1,17 +1,20 @@
 use std::{cell::RefCell, collections::HashSet};
 
-use candid::Principal;
-use ic_cdk::{export_candid, query, update};
-use ic_cdk::api::management_canister::http_request::{  
-    http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod, HttpResponse, TransformArgs,  
-    TransformContext,  
-   };
-use ic_cdk::caller;
+use candid::{ Principal, Nat};
+use ic_cdk::api::call;
 use ic_cdk::api::management_canister::http_request::TransformFunc;
+use ic_cdk::api::management_canister::http_request::{
+    http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod, HttpResponse, TransformArgs,
+    TransformContext,
+};
+use ic_cdk::caller;
+use ic_cdk::{export_candid, query, update};
 // use ic_cdk::api::call::call;
-use candid::{CandidType};
-use serde_json::json;
+use candid::CandidType;
+use icrc_ledger_types::icrc1::account::Account;
+use icrc_ledger_types::icrc2::transfer_from::{TransferFromArgs, TransferFromError};
 use serde_derive::{Deserialize, Serialize};
+use serde_json::json;
 
 #[derive(CandidType, Serialize, Deserialize, Clone)]
 struct Node {
@@ -19,7 +22,6 @@ struct Node {
     total_emissions: f64,
     offset_emissions: f64,
 }
-
 
 #[derive(CandidType, Deserialize)]
 struct Client {
@@ -49,7 +51,7 @@ struct Project {
     pub icon: Option<String>,
 }
 
-thread_local! {  
+thread_local! {
     static API_KEY: RefCell<String> = RefCell::new(String::new());
     static AUTHORIZED_PRINCIPALS: RefCell<HashSet<Principal>> = RefCell::new(HashSet::new());
     static NODES: RefCell<Vec<Node>> = RefCell::new(Vec::new());
@@ -85,7 +87,6 @@ pub fn authorize(principal: Principal) {
         }
     });
 }
-
 
 #[update]
 pub fn deauthorize(principal: Principal) {
@@ -130,18 +131,18 @@ async fn get_emissions() -> Result<Vec<Node>, String> {
     let api_key = API_KEY.with(|k| k.borrow().clone());
     let url = "https://dashboard-backend.fly.dev/nodes/getNodeEmissions";
 
-    let request = CanisterHttpRequestArgument {  
-        url: url.to_string(),  
-        method: HttpMethod::GET,  
-        body: None,   
-        max_response_bytes: None,  
-        transform: Some(TransformContext {  
-        function: TransformFunc(candid::Func {  
-        principal: ic_cdk::api::id(),  
-        method: "transform".to_string(),  
-        }),  
-        context: vec![],  
-        }),  
+    let request = CanisterHttpRequestArgument {
+        url: url.to_string(),
+        method: HttpMethod::GET,
+        body: None,
+        max_response_bytes: None,
+        transform: Some(TransformContext {
+            function: TransformFunc(candid::Func {
+                principal: ic_cdk::api::id(),
+                method: "transform".to_string(),
+            }),
+            context: vec![],
+        }),
         headers: vec![
             HttpHeader {
                 name: "api-key".to_string(),
@@ -151,29 +152,36 @@ async fn get_emissions() -> Result<Vec<Node>, String> {
                 name: "accept".to_string(),
                 value: "application/json".to_string(),
             },
-        ],  
+        ],
     };
 
     match http_request(request, 21_000_000_000).await {
         Ok((response,)) => {
             let str_body = String::from_utf8(response.body)
-        .expect("Transformed response is not UTF-8 encoded.");
-        let json: serde_json::Value = serde_json::from_str(&str_body)
-            .map_err(|e| format!("Failed to parse JSON: {}", e))?;
-        let nodes: Vec<Node> = json.as_array().unwrap().iter().map(|node| {
-        let name = node["name"].as_str().unwrap().to_string();
-        let total_emissions = node["total_emissions"].as_f64().unwrap();
-        Node {
-            name,
-            total_emissions,
-            offset_emissions: 0.0,
-        }
-    }).collect();
-    Ok(nodes)
+                .expect("Transformed response is not UTF-8 encoded.");
+            let json: serde_json::Value = serde_json::from_str(&str_body)
+                .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+            let nodes: Vec<Node> = json
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|node| {
+                    let name = node["name"].as_str().unwrap().to_string();
+                    let total_emissions = node["total_emissions"].as_f64().unwrap();
+                    Node {
+                        name,
+                        total_emissions,
+                        offset_emissions: 0.0,
+                    }
+                })
+                .collect();
+            Ok(nodes)
         }
         Err((r, m)) => {
-            let message =
-                format!("The http_request resulted into error. RejectionCode: {:?}, Error: {}", r, m);
+            let message = format!(
+                "The http_request resulted into error. RejectionCode: {:?}, Error: {}",
+                r, m
+            );
             Err(message)
         }
     }
@@ -181,32 +189,43 @@ async fn get_emissions() -> Result<Vec<Node>, String> {
 
 // offset emissions from nodes based on a client
 #[update]
-async fn offset_emissions(mut client: Client, mut offset: f64, node_name: Option<String>) -> String{
+async fn offset_emissions(
+    mut client: Client,
+    mut offset: f64,
+    node_name: Option<String>,
+) -> String {
     // only authorized principals can call this function
-    let caller = caller(); 
+    let caller = caller();
     let is_authorized = AUTHORIZED_PRINCIPALS.with(|p| {
         let authorized_principals = p.borrow();
         authorized_principals.is_empty() || authorized_principals.contains(&caller)
     });
 
     if !is_authorized {
-        return serde_json::to_string(&json!({"error": "Unauthorized: the caller is not allowed to perform this action."})).unwrap();
+        return serde_json::to_string(
+            &json!({"error": "Unauthorized: the caller is not allowed to perform this action."}),
+        )
+        .unwrap();
     }
 
-    
     // If offset is 0, return early.
     if offset == 0.0 {
-        return serde_json::to_string(&json!({"message": "No emissions offset because offset amount is 0"})).unwrap();
+        return serde_json::to_string(
+            &json!({"message": "No emissions offset because offset amount is 0"}),
+        )
+        .unwrap();
     }
 
-    
     if let Some(name) = node_name {
         // The client specified a node_name.
         // check if total emissions is 0
         if client.nodes.iter().all(|n| n.total_emissions == 0.0) {
-            return serde_json::to_string(&json!({"message": "No emissions offset because total emissions is 0"})).unwrap();
+            return serde_json::to_string(
+                &json!({"message": "No emissions offset because total emissions is 0"}),
+            )
+            .unwrap();
         }
-        
+
         if let Some(node) = client.nodes.iter_mut().find(|n| n.name == name) {
             // Found the node, offset the emissions.
             let mut offset_for_this_node = offset.min(node.total_emissions);
@@ -246,7 +265,7 @@ async fn offset_emissions(mut client: Client, mut offset: f64, node_name: Option
             }
         } else {
             // The client isn't attached to any nodes, select a random set of nodes and offset the emissions.
-            let nodes_future = select_random_nodes(); 
+            let nodes_future = select_random_nodes();
             let nodes = nodes_future.await;
             for mut node in nodes {
                 let offset_for_this_node = offset.min(node.total_emissions);
@@ -291,33 +310,43 @@ fn offset_from_nodes(mut nodes: Vec<Node>, mut offset: f64) {
 #[update]
 async fn select_random_nodes() -> Vec<Node> {
     let emissions_result = get_emissions().await;
-    
+
     let mut nodes: Vec<Node> = match emissions_result {
-        Ok(emissions) => emissions.into_iter().filter(|node| node.total_emissions > 0.0).collect(),
-        Err(_) => vec![],  // Handle the error appropriately.
+        Ok(emissions) => emissions
+            .into_iter()
+            .filter(|node| node.total_emissions > 0.0)
+            .collect(),
+        Err(_) => vec![], // Handle the error appropriately.
     };
-    
+
     // Sort the nodes from highest to lowest total_emissions.
     nodes.sort_by(|a, b| b.total_emissions.partial_cmp(&a.total_emissions).unwrap());
-    
+
     nodes
 }
 
 #[update]
-async fn get_offset_emissions(simple_client: SimpleClient, payment: Vec<Payment>, node_name: Option<String>) -> String {
+async fn get_offset_emissions(
+    simple_client: SimpleClient,
+    payment: Vec<Payment>,
+    node_name: Option<String>,
+) -> String {
     let all_nodes_result = get_emissions().await;
-    
+
     match all_nodes_result {
         Ok(all_nodes) => {
             let node_ids = simple_client.node_ids.clone();
-            let nodes: Vec<Node> = all_nodes.into_iter().filter(|node| node_ids.contains(&node.name)).collect();
+            let nodes: Vec<Node> = all_nodes
+                .into_iter()
+                .filter(|node| node_ids.contains(&node.name))
+                .collect();
             let client = Client {
                 client: simple_client.name,
                 nodes,
             };
             let offset = payment.iter().fold(0.0, |acc, p| acc);
             offset_emissions(client, offset, node_name).await
-        },
+        }
         Err(e) => {
             format!("Error getting emissions: {}", e)
         }
@@ -331,9 +360,7 @@ fn get_node_offset_emissions(node_name: String) -> String {
         let nodes = n.borrow();
         let node = nodes.iter().find(|n| n.name == node_name);
         match node {
-            Some(node) => {
-                serde_json::to_string(&node).unwrap()
-            },
+            Some(node) => serde_json::to_string(&node).unwrap(),
             None => {
                 format!("Node {} not found", node_name)
             }
@@ -346,7 +373,11 @@ fn get_node_offset_emissions(node_name: String) -> String {
 fn get_client_offset_emissions(client_name: String) -> String {
     NODES.with(|n| {
         let nodes = n.borrow();
-        let client_nodes: Vec<Node> = nodes.iter().filter(|n| n.name.starts_with(&client_name)).cloned().collect();
+        let client_nodes: Vec<Node> = nodes
+            .iter()
+            .filter(|n| n.name.starts_with(&client_name))
+            .cloned()
+            .collect();
         serde_json::to_string(&client_nodes).unwrap()
     })
 }
@@ -377,7 +408,6 @@ fn add_project(project: Project) {
 //     })
 // }
 
-
 #[update]
 pub fn remove_project(project_id: String) {
     PROJECTS.with(|p| {
@@ -393,6 +423,56 @@ fn delete_all_projects() {
         let mut projects = p.borrow_mut();
         projects.clear();
     });
+}
+
+#[update(name = "registerPayment")]
+async fn register_payment(amount: u64) -> String {
+    let ledger_canister_id = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai");
+
+    match ledger_canister_id {
+        Ok(principal) => {
+            let transfer_args = TransferFromArgs {
+                spender_subaccount: None,
+                from: Account {
+                    owner: caller(),
+                    subaccount: None,
+                },
+                to: Account {
+                    owner: Principal::from_text(
+                        "p7fau-co6y6-lqstu-3i3z3-ujquv-bu7a2-ngent-b2j62-a3ctd-2uprh-tae",
+                    )
+                    .unwrap(),
+                    subaccount: None,
+                },
+                amount: Nat::from(amount as u64),
+                fee: None,
+                memo: None,
+                created_at_time: None,
+            };
+
+            let transfer_result = call::call::<
+                (TransferFromArgs,),
+                (Result<Nat, TransferFromError>,),
+            >(principal, "icrc2_transfer_from", (transfer_args,))
+            .await;
+
+            if let Err(error) = transfer_result {
+                ic_cdk::println!("Transfer error {:?} and message {}", error.0, error.1);
+                return serde_json::to_string(&json!({"error": "Transaction Error"})).unwrap();
+            } else {
+                return serde_json::to_string(&json!({
+                    "success": "Transfer Successful",
+                    "transfer_details": {
+                        "from": caller().to_text(),
+                        "to": "p7fau-co6y6-lqstu-3i3z3-ujquv-bu7a2-ngent-b2j62-a3ctd-2uprh-tae",
+                        "amount": amount
+                    }
+                }))
+                .unwrap();
+            }
+        }
+        Err(err) => return serde_json::to_string(&json!({"error": err.to_string()})).unwrap(),
+    }
 }
 
 export_candid!();
