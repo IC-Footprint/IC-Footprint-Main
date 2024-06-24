@@ -7,15 +7,36 @@ type RejectionCode = variant {
   SysFatal;
   CanisterReject;
 };
-type Result = variant { Ok : record { float64; float64; float64 }; Err : text };
-type Result_1 = variant {
+type Result = variant { Ok : vec principal; Err : text };
+type Result_1 = variant { Ok : SnsCanisters; Err : text };
+type Result_2 = variant { Ok : nat64; Err : text };
+type Result_3 = variant {
   Ok : vec nat64;
   Err : record { RejectionCode; text };
 };
+type Result_4 = variant { Ok : SnsMetadata; Err : text };
+type SnsCanisters = record {
+  root : opt principal;
+  swap : opt principal;
+  ledger : opt principal;
+  index : opt principal;
+  governance : opt principal;
+  dapps : vec principal;
+  archives : vec principal;
+};
+type SnsMetadata = record {
+  url : opt text;
+  logo : opt text;
+  name : opt text;
+  description : opt text;
+};
 service : {
-  calculate_carbon_emissions : (float64) -> (float64);
-  calculate_emissions : (principal) -> (Result);
-  get_canister_status : (principal) -> (Result_1);
-  record_energy_usage : (vec nat64) -> (float64);
-  update_cumulative_data : (float64, float64) -> ();
+  calculate_canister_emission_rate : (float64, float64, float64) -> (float64);
+  fetch_root_canisters : () -> (Result);
+  fetch_sns_canisters_for_root : (principal) -> (Result_1);
+  get_canister_cycles_from_root : (principal, principal) -> (Result_2);
+  get_canister_status : (principal) -> (Result_3);
+  get_root_canister_cycles_burn_rate : (principal) -> (Result_2);
+  get_sns_metadata : (principal) -> (Result_4);
+  update_burn_rate : (nat64) -> ();
 }

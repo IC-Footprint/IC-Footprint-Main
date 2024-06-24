@@ -1,18 +1,2 @@
-type CanisterSettings = record {
-  freezing_threshold : nat;
-  controllers : vec principal;
-  memory_allocation : nat;
-  compute_allocation : nat;
-};
-type CanisterStatus = variant { Stopped; Stopping; Running };
 type CanisterStatusRequest = record { canister_id : principal };
-type CanisterStatusResponse = record {
-  status : CanisterStatus;
-  memory_size : nat;
-  cycles : nat;
-  settings : CanisterSettings;
-  module_hash : opt vec nat8;
-};
-service : {
-  canister_status : (CanisterStatusRequest) -> (CanisterStatusResponse);
-}
+service : { canister_status : (CanisterStatusRequest) -> (text) }
