@@ -2,11 +2,13 @@ use candid::{CandidType, Deserialize, Nat, Principal};
 use ic_cdk::api::call::{call, CallResult};
 use ic_cdk::{query, update};
 use std::cell::RefCell;
+use std::collections::HashMap;
 
 thread_local! {
     static PREV_CYCLES: RefCell<u64> = RefCell::new(0);
     static AVG_BURN_RATE: RefCell<f64> = RefCell::new(0.0);
-    static DIFF: RefCell<Vec<f64>> = RefCell::new(Vec::new())
+    static DIFF: RefCell<Vec<f64>> = RefCell::new(Vec::new());
+    static SNS_DATA: RefCell<SnsData> = RefCell::new(SnsData::new());
 }
 
 #[derive(CandidType, Deserialize, Debug)]
@@ -60,7 +62,7 @@ struct DeployedSnses {
     instances: Vec<CanisterInfo>,
 }
 
-#[derive(CandidType, Deserialize, Debug)]
+#[derive(CandidType, Deserialize, Debug, Clone)]
 struct SnsCanisters {
     root: Option<Principal>,
     swap: Option<Principal>,
@@ -91,12 +93,41 @@ struct DetailedCanisterSettings {
     freezing_threshold: Option<Nat>,
 }
 
-#[derive(CandidType, Deserialize, Debug)]
+#[derive(CandidType, Deserialize, Debug, Clone)]
 struct SnsMetadata {
     url: Option<String>,
     logo: Option<String>,
     name: Option<String>,
     description: Option<String>,
+}
+
+#[derive(CandidType, Deserialize, Debug, Clone)]
+struct SnsData {
+    root_canisters: Vec<Principal>,
+    canisters: HashMap<Principal, SnsCanisters>,
+    cycle_burn_rate: HashMap<Principal, u64>,
+    sns_emissions: HashMap<Principal, f64>,
+    metadata: HashMap<Principal, SnsMetadata>,
+    emissions_data: HashMap<Principal, SnsEmissionData>,
+}
+
+#[derive(CandidType, Deserialize, Debug, Clone)]
+struct SnsEmissionData {
+    last_calculation_time: u64,
+    cumulative_emissions: f64,
+}
+
+impl SnsData {
+    fn new() -> Self {
+        SnsData {
+            root_canisters: Vec::new(),
+            canisters: HashMap::new(),
+            cycle_burn_rate: HashMap::new(),
+            sns_emissions: HashMap::new(),
+            metadata: HashMap::new(),
+            emissions_data: HashMap::new(),
+        }
+    }
 }
 
 /// Fetches the root canisters from the NNS canister.
@@ -113,16 +144,23 @@ struct SnsMetadata {
 async fn fetch_root_canisters() -> Result<Vec<Principal>, String> {
     let nns_canister = Principal::from_text("qaa6y-5yaaa-aaaaa-aaafa-cai").unwrap();
 
-    // Call list_deployed_snses to get root canisters
     let result: Result<(DeployedSnses,), _> =
         call(nns_canister, "list_deployed_snses", (Empty {},)).await;
 
     match result {
-        Ok((deployed_snses,)) => Ok(deployed_snses
-            .instances
-            .iter()
-            .map(|x| x.root_canister_id.unwrap())
-            .collect()),
+        Ok((deployed_snses,)) => {
+            let root_canisters: Vec<Principal> = deployed_snses
+                .instances
+                .iter()
+                .map(|x| x.root_canister_id.unwrap())
+                .collect();
+
+            SNS_DATA.with(|data| {
+                data.borrow_mut().root_canisters = root_canisters.clone();
+            });
+
+            Ok(root_canisters)
+        }
         Err(e) => Err(format!("Error calling list_deployed_snses: {:?}", e)),
     }
 }
@@ -147,7 +185,15 @@ async fn fetch_sns_canisters_for_root(root_canister_id: Principal) -> Result<Sns
         call(root_canister_id.clone(), "list_sns_canisters", (Empty {},)).await;
 
     match sns_canisters {
-        Ok((sns_canisters,)) => Ok(sns_canisters),
+        Ok((sns_canisters,)) => {
+            SNS_DATA.with(|data| {
+                data.borrow_mut()
+                    .canisters
+                    .insert(root_canister_id, sns_canisters.clone());
+            });
+
+            Ok(sns_canisters)
+        }
         Err(e) => {
             ic_cdk::print(format!("Error fetching sns canisters: {:?}", e));
             Err(format!("Error fetching sns canisters: {:?}", e))
@@ -212,31 +258,39 @@ async fn get_root_canister_cycles_burn_rate(root_canister_id: Principal) -> Resu
     }
 }
 
-// get sns metadata from the governance canister
 #[update]
+/// Fetches the SNS metadata from the governance canister for the given root canister ID.
+///
+/// # Arguments
+/// * `root_canister_id` - The Principal ID of the root canister for the SNS system.
+///
+/// # Returns
+/// A `Result` containing the SNS metadata, or an error message as a `String` if the metadata fetch operation fails.
 async fn get_sns_metadata(root_canister_id: Principal) -> Result<SnsMetadata, String> {
     let sns_canisters_result = fetch_sns_canisters_for_root(root_canister_id).await;
 
     match sns_canisters_result {
         Ok(sns_canisters) => {
-            let governance_canister = sns_canisters.governance;
-
-            match governance_canister {
-                Some(governance_canister) => {
-                    let governance_result =
-                        call(governance_canister, "get_metadata", (Empty {},)).await;
-                    match governance_result {
-                        Ok((sns_metadata,)) => Ok(sns_metadata),
-                        Err(e) => {
-                            ic_cdk::print(format!("Error fetching SNS metadata: {:?}", e));
-                            return Err(format!("Error fetching SNS metadata: {:?}", e));
-                        }
+            if let Some(governance_canister) = sns_canisters.governance {
+                let governance_result: CallResult<(SnsMetadata,)> =
+                    call(governance_canister, "get_metadata", (Empty {},)).await;
+                match governance_result {
+                    Ok((sns_metadata,)) => {
+                        SNS_DATA.with(|data| {
+                            data.borrow_mut()
+                                .metadata
+                                .insert(root_canister_id, sns_metadata.clone());
+                        });
+                        Ok(sns_metadata)
+                    }
+                    Err(e) => {
+                        ic_cdk::print(format!("Error fetching SNS metadata: {:?}", e));
+                        Err(format!("Error fetching SNS metadata: {:?}", e))
                     }
                 }
-                None => {
-                    ic_cdk::print("No governance canister found");
-                    return Err("No governance canister found".to_string());
-                }
+            } else {
+                ic_cdk::print("No governance canister found");
+                Err("No governance canister found".to_string())
             }
         }
         Err(e) => {
@@ -267,69 +321,22 @@ async fn get_canister_cycles_from_root(
     let status_result: CallResult<(DetailedCanisterStatusResponse,)> =
         call(root_canister_id, "canister_status", (request,)).await;
 
-    ic_cdk::print(format!("Raw response: {:?}", status_result));
-
     match status_result {
-        Ok((canister_status,)) => {
-            ic_cdk::print(format!("Decoded response: {:?}", canister_status));
-            match canister_status.idle_cycles_burned_per_day {
-                Some(idle_cycles_burned_per_day) => {
-                    Ok(idle_cycles_burned_per_day.0.to_u64_digits().iter().sum())
-                }
-                None => {
-                    ic_cdk::print(format!("Canister {} has no cycles balance", canister_id));
-                    Err(format!("Canister {} has no cycles balance", canister_id))
-                }
+        Ok((canister_status,)) => match canister_status.idle_cycles_burned_per_day {
+            Some(idle_cycles_burned_per_day) => {
+                let burn_rate = idle_cycles_burned_per_day.0.to_u64_digits().iter().sum();
+                SNS_DATA.with(|data| {
+                    data.borrow_mut()
+                        .cycle_burn_rate
+                        .insert(canister_id, burn_rate);
+                });
+                Ok(burn_rate)
             }
-        }
-        Err((rejection_code, message)) => {
-            ic_cdk::print(format!("Error fetching canister status: {:?}", message));
-            Err(format!("Error fetching canister status: {:?}", message))
-        }
+            None => Err(format!("Canister {} has no cycles balance", canister_id)),
+        },
+        Err((_, message)) => Err(format!("Error fetching canister status: {:?}", message)),
     }
 }
-
-// #[update]
-// async fn fetch_all_sns_canisters() -> Vec<Principal> {
-//     let root_canisters_result = fetch_root_canisters().await;
-//     let mut all_sns_canisters = Vec::new();
-
-//     match root_canisters_result {
-//         Ok(root_canisters) => {
-//             for root_canister_id in root_canisters {
-//                 match fetch_sns_canisters_for_root(root_canister_id).await {
-//                     Ok(sns_canisters) => {
-//                         if let Some(root) = sns_canisters.root {
-//                             all_sns_canisters.push(root);
-//                         }
-//                         if let Some(swap) = sns_canisters.swap {
-//                             all_sns_canisters.push(swap);
-//                         }
-//                         if let Some(ledger) = sns_canisters.ledger {
-//                             all_sns_canisters.push(ledger);
-//                         }
-//                         if let Some(index) = sns_canisters.index {
-//                             all_sns_canisters.push(index);
-//                         }
-//                         if let Some(governance) = sns_canisters.governance {
-//                             all_sns_canisters.push(governance);
-//                         }
-//                         all_sns_canisters.extend(sns_canisters.dapps);
-//                         all_sns_canisters.extend(sns_canisters.archives);
-//                     }
-//                     Err(e) => {
-//                         ic_cdk::print(e);
-//                     }
-//                 }
-//             }
-//         }
-//         Err(e) => {
-//             ic_cdk::print(format!("Error fetching root canisters: {}", e));
-//         }
-//     }
-
-//     all_sns_canisters
-// }
 
 /// Fetches the status of the specified canister, including the number of cycles it has.
 ///
@@ -369,41 +376,6 @@ async fn get_canister_status(canister_id: Principal) -> CallResult<Vec<u64>> {
     }
 }
 
-/// Updates the average burn rate of cycles based on the new cycles value.
-///
-/// This function calculates the difference between the new cycles value and the previous cycles value,
-/// and updates the average burn rate accordingly. If the previous cycles value is 0 or the new cycles
-/// value is greater than or equal to the previous cycles value, the average burn rate is kept constant.
-///
-/// # Arguments
-/// * `new_cycles` - The new cycles value to update the average burn rate with.
-///
-/// # Returns
-/// This function does not return a value, it updates the average burn rate in-place.
-#[update]
-fn update_burn_rate(new_cycles: u64) -> () {
-    PREV_CYCLES.with(|prev_cycles| {
-        AVG_BURN_RATE.with(|avg_burn_rate| {
-            // store the difference between the new cycles an the old cycles in diff then find the average
-            DIFF.with(|diff| {
-                if *prev_cycles.borrow() == 0 || new_cycles >= *prev_cycles.borrow() {
-                    // If prev_cycles is 0 or new_cycles is greater than or equal to prev_cycles,
-                    // keep the avg_burn_rate constant
-                    *prev_cycles.borrow_mut() = new_cycles;
-                    return *avg_burn_rate.borrow();
-                }
-
-                let mut diff = diff.borrow_mut();
-                diff.push((*prev_cycles.borrow()) as f64 - (new_cycles as f64));
-                let sum: f64 = diff.iter().sum();
-                *avg_burn_rate.borrow_mut() = sum / diff.len() as f64;
-                *prev_cycles.borrow_mut() = new_cycles;
-                *avg_burn_rate.borrow()
-            });
-        })
-    })
-}
-
 /// Calculates the canister emission rate based on the network burn rate, network emission rate, and SNS burn rate.
 ///
 /// If the network burn rate is 0.0, this function will return 0.0.
@@ -424,7 +396,122 @@ fn calculate_canister_emission_rate(
     if network_burn_rate == 0.0 {
         return 0.0;
     }
-    (sns_burn_rate * network_emission_rate) / network_burn_rate
+    let emission_rate = (sns_burn_rate * network_emission_rate) / network_burn_rate;
+    emission_rate
+}
+
+#[update]
+async fn get_cumulative_sns_emissions(
+    root_id: Principal,
+    network_burn_rate: f64,
+    network_emission_rate: f64,
+    sns_burn_rate: f64,
+) -> Result<f64, String> {
+    let current_time = ic_cdk::api::time();
+
+    // First, read the current data without mutable borrow
+    let (last_calculation_time, cumulative_emissions) = SNS_DATA.with(|data| {
+        let data = data.borrow();
+        let emissions_data =
+            data.emissions_data
+                .get(&root_id)
+                .cloned()
+                .unwrap_or(SnsEmissionData {
+                    last_calculation_time: 0,
+                    cumulative_emissions: 0.0,
+                });
+        (
+            emissions_data.last_calculation_time,
+            emissions_data.cumulative_emissions,
+        )
+    });
+
+    let hours_passed = (current_time - last_calculation_time) / (60 * 60 * 1_000_000_000);
+
+    if hours_passed >= 24 {
+        // Calculate new daily emission
+        let daily_emission = calculate_canister_emission_rate(
+            network_burn_rate,
+            network_emission_rate,
+            sns_burn_rate,
+        );
+
+        let new_emissions = daily_emission;
+        let new_cumulative_emissions = cumulative_emissions + new_emissions;
+
+        // Update the data with a mutable borrow
+        SNS_DATA.with(|data| {
+            let mut data = data.borrow_mut();
+            let emissions_data = data
+                .emissions_data
+                .entry(root_id)
+                .or_insert(SnsEmissionData {
+                    last_calculation_time: 0,
+                    cumulative_emissions: 0.0,
+                });
+            emissions_data.cumulative_emissions = new_cumulative_emissions;
+            emissions_data.last_calculation_time = current_time;
+        });
+
+        Ok(new_cumulative_emissions)
+    } else {
+        Ok(cumulative_emissions)
+    }
+}
+
+#[query]
+/// Returns a vector of all the root canister IDs in the SNS data.
+fn get_root_canisters() -> Vec<Principal> {
+    SNS_DATA.with(|data| data.borrow().root_canisters.clone())
+}
+
+#[query]
+/// Returns the SNS canisters associated with the given root canister ID, if they exist.
+///
+/// # Arguments
+/// * `root_canister_id` - The root canister ID to look up.
+///
+/// # Returns
+/// An `Option` containing the `SnsCanisters` associated with the given root canister ID, if they exist.
+fn get_sns_canisters(root_canister_id: Principal) -> Option<SnsCanisters> {
+    SNS_DATA.with(|data| data.borrow().canisters.get(&root_canister_id).cloned())
+}
+
+#[query]
+/// Returns the current cycle burn rate for the given canister ID, if it exists.
+///
+/// # Arguments
+/// * `canister_id` - The ID of the canister to get the cycle burn rate for.
+///
+/// # Returns
+/// An `Option` containing the cycle burn rate for the given canister ID, if it exists.
+fn get_cycle_burn_rate(canister_id: Principal) -> Option<u64> {
+    SNS_DATA.with(|data| data.borrow().cycle_burn_rate.get(&canister_id).cloned())
+}
+
+#[query]
+/// Returns a clone of the entire SNS data.
+///
+/// This function retrieves the SNS data from the `SNS_DATA` thread-local storage and returns a clone of the entire data structure.
+fn get_all_sns_data() -> SnsData {
+    SNS_DATA.with(|data| data.borrow().clone())
+}
+
+#[query]
+/// Returns the current SNS emissions for the given root canister ID, if they exist.
+///
+/// # Arguments
+/// * `root_id` - The root canister ID to look up.
+///
+/// # Returns
+/// An `Option` containing the current SNS emissions for the given root canister ID, if they exist.
+fn get_sns_emissions(root_id: Principal) -> Option<f64> {
+    SNS_DATA.with(|data| data.borrow().sns_emissions.get(&root_id).cloned())
+}
+
+#[query]
+fn get_metadata(root_id: Principal) -> Option<SnsMetadata> {
+    SNS_DATA.with(|data| data.borrow().metadata.get(&root_id).cloned())
 }
 
 ic_cdk::export_candid!();
