@@ -408,27 +408,17 @@ async fn get_cumulative_sns_emissions(
     sns_burn_rate: f64,
 ) -> Result<f64, String> {
     let current_time = ic_cdk::api::time();
-
-    // First, read the current data without mutable borrow
-    let (last_calculation_time, cumulative_emissions) = SNS_DATA.with(|data| {
+    let should_update = SNS_DATA.with(|data| {
         let data = data.borrow();
-        let emissions_data =
-            data.emissions_data
-                .get(&root_id)
-                .cloned()
-                .unwrap_or(SnsEmissionData {
-                    last_calculation_time: 0,
-                    cumulative_emissions: 0.0,
-                });
-        (
-            emissions_data.last_calculation_time,
-            emissions_data.cumulative_emissions,
-        )
+        data.emissions_data
+            .get(&root_id)
+            .map(|emission_data| {
+                current_time - emission_data.last_calculation_time >= 24 * 60 * 60 * 1_000_000_000
+            })
+            .unwrap_or(true)
     });
 
-    let hours_passed = (current_time - last_calculation_time) / (60 * 60 * 1_000_000_000);
-
-    if hours_passed >= 24 {
+    if should_update {
         // Calculate new daily emission
         let daily_emission = calculate_canister_emission_rate(
             network_burn_rate,
@@ -436,10 +426,6 @@ async fn get_cumulative_sns_emissions(
             sns_burn_rate,
         );
 
-        let new_emissions = daily_emission;
-        let new_cumulative_emissions = cumulative_emissions + new_emissions;
-
-        // Update the data with a mutable borrow
         SNS_DATA.with(|data| {
             let mut data = data.borrow_mut();
             let emissions_data = data
@@ -449,14 +435,18 @@ async fn get_cumulative_sns_emissions(
                     last_calculation_time: 0,
                     cumulative_emissions: 0.0,
                 });
-            emissions_data.cumulative_emissions = new_cumulative_emissions;
+            emissions_data.cumulative_emissions += daily_emission;
             emissions_data.last_calculation_time = current_time;
         });
-
-        Ok(new_cumulative_emissions)
-    } else {
-        Ok(cumulative_emissions)
     }
+
+    SNS_DATA.with(|data| {
+        let data = data.borrow();
+        data.emissions_data
+            .get(&root_id)
+            .map(|emission_data| emission_data.cumulative_emissions)
+            .ok_or_else(|| format!("No emissions data found for SNS with root ID: {}", root_id))
+    })
 }
 
 #[query]
@@ -512,6 +502,17 @@ fn get_sns_emissions(root_id: Principal) -> Option<f64> {
 #[query]
 fn get_metadata(root_id: Principal) -> Option<SnsMetadata> {
     SNS_DATA.with(|data| data.borrow().metadata.get(&root_id).cloned())
+}
+
+#[query]
+fn get_stored_sns_emissions(root_id: Principal) -> Result<f64, String> {
+    SNS_DATA.with(|data| {
+        let data = data.borrow();
+        data.emissions_data
+            .get(&root_id)
+            .map(|emission_data| emission_data.cumulative_emissions)
+            .ok_or_else(|| format!("No emissions data found for SNS with root ID: {}", root_id))
+    })
 }
 
 ic_cdk::export_candid!();

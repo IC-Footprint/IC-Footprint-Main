@@ -60,4 +60,5 @@ service : {
   get_sns_canisters : (principal) -> (opt SnsCanisters) query;
   get_sns_emissions : (principal) -> (opt float64) query;
   get_sns_metadata : (principal) -> (Result_5);
+  get_stored_sns_emissions : (principal) -> (Result_4) query;
 }
