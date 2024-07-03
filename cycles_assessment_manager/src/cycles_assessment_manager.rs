@@ -1,6 +1,6 @@
 use candid::{CandidType, Deserialize, Nat, Principal};
 use ic_cdk::api::call::{call, CallResult};
-use ic_cdk::{query, update};
+use ic_cdk::{post_upgrade, pre_upgrade, query, update};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
@@ -128,6 +128,23 @@ impl SnsData {
             emissions_data: HashMap::new(),
         }
     }
+}
+
+// make the data in the thread local persist
+#[pre_upgrade]
+fn pre_upgrade() {
+    SNS_DATA.with(|data| {
+        let sns_data = data.borrow().clone();
+        ic_cdk::storage::stable_save((sns_data,)).unwrap();
+    });
+}
+
+#[post_upgrade]
+fn post_upgrade() {
+    let (sns_data,): (SnsData,) = ic_cdk::storage::stable_restore().unwrap();
+    SNS_DATA.with(|data| {
+        *data.borrow_mut() = sns_data;
+    });
 }
 
 /// Fetches the root canisters from the NNS canister.
