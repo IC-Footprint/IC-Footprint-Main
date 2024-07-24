@@ -1,0 +1,2 @@
+type CanisterStatusRequest = record { canister_id : principal };
+service : { canister_status : (CanisterStatusRequest) -> (text) }

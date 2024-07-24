@@ -40,6 +40,26 @@
         "node_compatibility": true
       }
     },
+    "cycles_assessment_manager" : {
+      "package": "cycles_assessment_manager",
+      "candid" : "candid/cycles_assessment_manager.did",
+      "type": "rust",
+      "declarations" : {
+        "output": "dashboard-frontend/src/declarations/cycles_assessment_manager",
+        "bindings": ["js", "ts", "did", "mo"],
+        "node_compatibility": true
+      }
+    },
+     "blackhole" : {
+      "package": "blackhole",
+      "candid" : "candid/blackhole.did",
+      "type": "rust",
+      "declarations" : {
+        "output": "dashboard-frontend/src/declarations/blackhole",
+        "bindings": ["js", "ts", "did", "mo"],
+        "node_compatibility": true
+      }
+    },
     "icrc1_ledger_canister": {
       "type": "custom",
       "candid": "https://raw.githubusercontent.com/dfinity/ic/d87954601e4b22972899e9957e800406a0a6b929/rs/rosetta-api/icrc1/ledger/ledger.did",

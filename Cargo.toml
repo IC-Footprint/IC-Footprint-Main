@@ -2,5 +2,7 @@
 resolver = "2"
 members = [
     "esg_wallet",
-    "node_manager"
+    "node_manager",
+    "cycles_assessment_manager",
+    "blackhole"
 ]

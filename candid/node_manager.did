@@ -1,3 +1,4 @@
+type Client = record { client : text; nodes : vec Node };
 type HttpHeader = record { value : text; name : text };
 type HttpResponse = record {
   status : nat;
@@ -5,37 +6,36 @@ type HttpResponse = record {
   headers : vec HttpHeader;
 };
 type Node = record {
-  name: text;
-  totalEmissions: float64;
-  offsetEmissions: float64
-};
-type GetEmissionsResponse = variant {
-  Ok: vec Node;
-  Err: text;
-};
-type Client = record {
-  client : text;
-  nodes : opt vec text;
-};
-type SimpleClient = record {
+  total_emissions : float64;
   name : text;
-  node_ids: vec text;
+  offset_emissions : float64;
 };
 type Payment = record {
   ticket_price : nat64;
   payer : text;
-  block_height : nat;
+  block_height : nat64;
   ticket_count : nat64;
-  contribution_id: text;
+  contribution_id : text;
 };
+type Project = record { id : vec text; icon : opt text; name : text };
+type Result = variant { Ok : vec Node; Err : text };
+type SimpleClient = record { name : text; node_ids : vec text };
 type TransformArgs = record { context : vec nat8; response : HttpResponse };
 service : {
-  set_api_key: (text) -> ();
-  authorize: (principal) -> ();
-  deauthorize: (principal) -> ();
-  get_emissions: () -> (GetEmissionsResponse);
-  offset_emissions: (Client, float64, opt text) -> (text);
-  get_offset_emissions: (SimpleClient, Payment) -> ();
-  get_node_offset_emissions: (text) -> (text) query;
-  get_client_offset_emissions: (text) -> (text) query;
+  add_project : (Project) -> ();
+  authorize : (principal) -> ();
+  deauthorize : (principal) -> ();
+  delete_all_projects : () -> ();
+  get_client_offset_emissions : (text) -> (text) query;
+  get_emissions : () -> (Result);
+  get_node_offset_emissions : (text) -> (text) query;
+  get_offset_emissions : (SimpleClient, vec Payment, opt text) -> (text);
+  get_projects : () -> (vec Project) query;
+  offset_emissions : (Client, float64, opt text) -> (text);
+  offset_from_nodes : (vec Node, float64) -> ();
+  registerPayment : (nat64) -> (text);
+  remove_project : (text) -> ();
+  select_random_nodes : () -> (vec Node);
+  set_api_key : (text) -> ();
+  transform : (TransformArgs) -> (HttpResponse) query;
 }

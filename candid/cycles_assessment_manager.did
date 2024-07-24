@@ -1,0 +1,64 @@
+type RejectionCode = variant {
+  NoError;
+  CanisterError;
+  SysTransient;
+  DestinationInvalid;
+  Unknown;
+  SysFatal;
+  CanisterReject;
+};
+type Result = variant { Ok : vec principal; Err : text };
+type Result_1 = variant { Ok : SnsCanisters; Err : text };
+type Result_2 = variant { Ok : nat64; Err : text };
+type Result_3 = variant {
+  Ok : vec nat64;
+  Err : record { RejectionCode; text };
+};
+type Result_4 = variant { Ok : float64; Err : text };
+type Result_5 = variant { Ok : SnsMetadata; Err : text };
+type SnsCanisters = record {
+  root : opt principal;
+  swap : opt principal;
+  ledger : opt principal;
+  index : opt principal;
+  governance : opt principal;
+  dapps : vec principal;
+  archives : vec principal;
+};
+type SnsData = record {
+  metadata : vec record { principal; SnsMetadata };
+  canisters : vec record { principal; SnsCanisters };
+  root_canisters : vec principal;
+  emissions_data : vec record { principal; SnsEmissionData };
+  cycle_burn_rate : vec record { principal; nat64 };
+  sns_emissions : vec record { principal; float64 };
+};
+type SnsEmissionData = record {
+  cumulative_emissions : float64;
+  last_calculation_time : nat64;
+};
+type SnsMetadata = record {
+  url : opt text;
+  logo : opt text;
+  name : opt text;
+  description : opt text;
+};
+service : {
+  calculate_canister_emission_rate : (float64, float64, float64) -> (float64);
+  fetch_root_canisters : () -> (Result);
+  fetch_sns_canisters_for_root : (principal) -> (Result_1);
+  get_all_sns_data : () -> (SnsData) query;
+  get_canister_cycles_from_root : (principal, principal) -> (Result_2);
+  get_canister_status : (principal) -> (Result_3);
+  get_cumulative_sns_emissions : (principal, float64, float64, float64) -> (
+      Result_4,
+    );
+  get_cycle_burn_rate : (principal) -> (opt nat64) query;
+  get_metadata : (principal) -> (opt SnsMetadata) query;
+  get_root_canister_cycles_burn_rate : (principal) -> (Result_2);
+  get_root_canisters : () -> (vec principal) query;
+  get_sns_canisters : (principal) -> (opt SnsCanisters) query;
+  get_sns_emissions : (principal) -> (opt float64) query;
+  get_sns_metadata : (principal) -> (Result_5);
+  get_stored_sns_emissions : (principal) -> (Result_4) query;
+}
